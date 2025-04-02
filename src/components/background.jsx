@@ -382,14 +382,12 @@ const Background = () => {
                 <color attach="background" args={['#000000']} />
 
                 {/* Fog - only active during wormhole journey */}
-                {entered && (
-                    <fog
-                        attach="fog"
-                        color="#000000"
-                        near={2}
-                        far={10}
-                    />
-                )}
+                  <fog
+                      attach="fog"
+                      color="#000000"
+                      near={2}
+                      far={8}
+                  />
 
                 {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
@@ -417,7 +415,7 @@ const Background = () => {
                 {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={entered ? 1.2 : 1.5}
+                        intensity={1.5}
                         luminanceThreshold={0.001}
                         luminanceSmoothing={0.2}
                         radius={0}
