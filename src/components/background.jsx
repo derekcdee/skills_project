@@ -69,21 +69,42 @@ function Wormhole({ visible }) {
 
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
-    // Scale down the points to fit our scene better - adjusted for straighter path
-    const scale = 0.3; // Smaller scale makes it straighter relatively
+    // Scale down the points to fit our scene better - adjusted for smoother path
+    const scale = 0.6; 
     const rawPoints = createSplinePoints();
-    const scaledPoints = rawPoints.map(p => 
-      new THREE.Vector3(p.x * scale, p.y * scale *.5, p.z * scale)
+    
+    // Enhanced point processing for smoother turns
+    const scaledPoints = [];
+    const tempPoints = rawPoints.map(p => 
+      new THREE.Vector3(p.x * scale, p.y * scale * 0.4, p.z * scale)
     );
     
-    // Create the curve
+    // Add smoothing by averaging nearby points
+    for (let i = 0; i < tempPoints.length; i++) {
+      const p = tempPoints[i].clone();
+      
+      // Smooth by averaging with neighboring points
+      if (i > 0 && i < tempPoints.length - 1) {
+        const prev = tempPoints[i-1];
+        const next = tempPoints[i+1];
+        
+        // Weighted average for smoother transitions
+        p.x = p.x * 0.6 + (prev.x + next.x) * 0.2;
+        p.y = p.y * 0.6 + (prev.y + next.y) * 0.2;
+        p.z = p.z * 0.6 + (prev.z + next.z) * 0.2;
+      }
+      
+      scaledPoints.push(p);
+    }
+    
+    // Create a smoother curve with more interpolation points
     const curve = new THREE.CatmullRomCurve3(scaledPoints);
     curve.closed = true;
     
-    // Create tube geometry - increased radius to keep camera inside better
-    const tubularSegments = 200; // Higher segment count for smoother tube
-    const radius = .6; // Increased radius 
-    const radialSegments = 16;
+    // Create tube geometry with more segments for smoother curves
+    const tubularSegments = 300; // Increased from 200 for smoother tube
+    const radius = 0.7; // Slightly larger radius
+    const radialSegments = 20; // Increased for smoother circular cross-section
     const closed = true;
     
     const geometry = new THREE.TubeGeometry(
@@ -148,19 +169,33 @@ function Wormhole({ visible }) {
     // Get position on the spline
     const p = progressRef.current;
     
-    // Get current position and tangent
+    // Get current position
     const pos = spline.getPointAt(p);
     
-    // Calculate look-ahead position with smaller offset to follow curve better
-    const lookAhead = (p + 0.01) % 1;
+    // Calculate look-ahead position with adaptive smoothing
+    // Look further ahead on straighter sections and less ahead on curves
+    const tangent = spline.getTangentAt(p);
+    const nextP = (p + 0.01) % 1;
+    const nextTangent = spline.getTangentAt(nextP);
+    
+    // Calculate dot product between current and next tangent
+    // This gives us information about how much the path is turning
+    const turnSharpness = tangent.dot(nextTangent);
+    
+    // Adjust look-ahead based on turn sharpness (smaller look-ahead for sharper turns)
+    const adaptiveLookAhead = Math.max(0.005, Math.min(0.015, 0.01 * turnSharpness));
+    const lookAhead = (p + adaptiveLookAhead) % 1;
     const lookAt = spline.getPointAt(lookAhead);
     
-    // Get tube direction at this point to keep camera centered
-    const tangent = spline.getTangentAt(p);
+    // Smooth camera position with subtle up vector adjustment
+    const up = new THREE.Vector3(0, 1, 0);
+    const normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+    const adjustedUp = new THREE.Vector3().crossVectors(normal, tangent).normalize();
     
-    // Update camera position using exact spline position
+    // Update camera
     camera.position.copy(pos);
     camera.lookAt(lookAt);
+    camera.up.copy(adjustedUp);
   });
 
   // Reset camera position when visibility changes
