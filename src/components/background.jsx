@@ -70,7 +70,7 @@ function Wormhole({ visible }) {
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
     // Scale down the points to fit our scene better - adjusted for smoother path
-    const scale = 0.7; 
+    const scale = 1.1; 
     const rawPoints = createSplinePoints();
     
     // Enhanced point processing for smoother turns
@@ -164,7 +164,7 @@ function Wormhole({ visible }) {
     if (!visible || !spline) return;
 
     // Faster movement for more exciting ride
-    progressRef.current += 0.00025; // Increased from 0.0001 for faster movement
+    progressRef.current += 0.00018; // Increased from 0.0001 for faster movement
     if (progressRef.current >= 1) progressRef.current = 0;
     
     // Get position on the spline
@@ -443,7 +443,7 @@ const Background = () => {
                         attach="fog"
                         color="#000000"
                         near={1.3}
-                        far={2.1}
+                        far={2.4}
                     />
                 )}
 
