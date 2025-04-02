@@ -65,20 +65,36 @@ function Wormhole({ visible, entered }) {
   const { camera } = useThree();
   const tubeRef = useRef();
   const progressRef = useRef(0);
-  const initialCameraPos = useRef([0, 0, 3]);
+  const initialCameraPos = useRef(new THREE.Vector3(0, 0, 3));
   const animationActive = useRef(false);
+  
+  // Save initial camera position when first mounted
+  useEffect(() => {
+    if (camera) {
+      initialCameraPos.current = camera.position.clone();
+    }
+  }, []);
 
-  // Create spline and tube
-  const [spline, tubeGeometry] = useMemo(() => {
-    // Create a new non-looping path that starts behind the enter button
-    const newPathPoints = [
-      // Start further behind the enter button (more negative Z)
-      new THREE.Vector3(0, 0, -3), 
-      // Initial straight section going away from camera (negative Z)
+  // Create extended spline including camera starting position
+  const [fullPath, tubeGeometry, visibleSpline] = useMemo(() => {
+    // Start with camera position and create a smooth path to wormhole
+    const cameraStartPoint = initialCameraPos.current.clone();
+    
+    // Create points for the approach to the wormhole entrance
+    const approachPoints = [
+      cameraStartPoint,
+      new THREE.Vector3(0, 0, 2),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, -1.5),
+    ];
+    
+    // Main wormhole path points (unchanged)
+    const wormholePoints = [
+      new THREE.Vector3(0, 0, -3),
       new THREE.Vector3(0, 0, -6),
       new THREE.Vector3(0, 0, -10),
       new THREE.Vector3(0, 0, -14),
-      // Begin gentle curves further away
       new THREE.Vector3(1, 0.5, -18),
       new THREE.Vector3(2, 1, -22),
       new THREE.Vector3(1, 2, -26),
@@ -87,44 +103,93 @@ function Wormhole({ visible, entered }) {
       new THREE.Vector3(0, -2, -38),
       new THREE.Vector3(2, -1, -42),
       new THREE.Vector3(1, 1, -46),
-      // Exit straight section
       new THREE.Vector3(0, 0, -50),
       new THREE.Vector3(0, 0, -55),
       new THREE.Vector3(0, 0, -60)
     ];
     
-    // Create a smoother curve with more interpolation points
-    const curve = new THREE.CatmullRomCurve3(newPathPoints);
-    curve.closed = false; // Not a loop
+    // Combine all points for the full camera path
+    const allPoints = [...approachPoints, ...wormholePoints];
+    
+    // Create the full path for camera movement
+    const fullCameraPath = new THREE.CatmullRomCurve3(allPoints);
+    fullCameraPath.closed = false;
+    
+    // Create a separate visible tube that starts at the wormhole entrance
+    const visiblePath = new THREE.CatmullRomCurve3(wormholePoints);
+    visiblePath.closed = false;
     
     // Create tube geometry with more segments for smoother curves
     const tubularSegments = 300;
-    const radius = 1.2; // Wider radius to accommodate camera
-    const radialSegments = 24; // Increased for smoother circular cross-section
-    const closed = false; // Not a closed tube
+    const radius = 1.2;
+    const radialSegments = 24;
+    const closed = false;
     
     const geometry = new THREE.TubeGeometry(
-      curve,
+      visiblePath,
       tubularSegments,
       radius,
       radialSegments,
       closed
     );
   
-    return [curve, geometry];
+    return [fullCameraPath, geometry, visiblePath];
   }, []);
 
-  // Create boxes along the path
+  // Calculate the path ratio - what portion of the full path is the approach vs the wormhole
+  const pathRatio = useMemo(() => {
+    return 5 / (5 + 15); // 5 approach points, 15 wormhole points (simplified ratio)
+  }, []);
+
+  // Start animation when entered prop changes
+  useEffect(() => {
+    if (entered) {
+      // Reset progress and start animation
+      progressRef.current = 0;
+      animationActive.current = true;
+    }
+  }, [entered]);
+
+  // Unified camera animation with consistent speed
+  useFrame((state, delta) => {
+    if (!entered || !animationActive.current || !fullPath) return;
+    
+    // Single consistent speed throughout the entire journey
+    const speed = 0.08;
+    progressRef.current += delta * speed;
+    
+    // Cap at 0.995 to prevent going beyond the end
+    progressRef.current = Math.min(progressRef.current, 0.995);
+    
+    // Get position on the spline
+    const pos = fullPath.getPointAt(progressRef.current);
+    
+    // Look ahead calculation
+    const lookAheadAmount = 0.01;
+    const lookAhead = Math.min(progressRef.current + lookAheadAmount, 0.999);
+    const lookAt = fullPath.getPointAt(lookAhead);
+    
+    // Camera setup
+    camera.position.copy(pos);
+    camera.lookAt(lookAt);
+    
+    // Add subtle camera roll effect
+    const time = state.clock.getElapsedTime();
+    const roll = Math.sin(time * 0.3) * 0.03;
+    camera.up.set(Math.sin(roll), Math.cos(roll), 0);
+  });
+
+  // Create boxes along the visible path only
   const boxes = useMemo(() => {
-    const numBoxes = 450; // More boxes for longer path
+    const numBoxes = 450;
     const result = [];
 
-    if (!spline) return [];
+    if (!visibleSpline) return [];
 
     for (let i = 0; i < numBoxes; i++) {
       // Distribute evenly along the path (no looping)
       const p = i / numBoxes;
-      const pos = spline.getPointAt(p);
+      const pos = visibleSpline.getPointAt(p);
       
       // Keep boxes closer to tube walls for tunnel effect
       const randomDirection = new THREE.Vector3(
@@ -155,56 +220,7 @@ function Wormhole({ visible, entered }) {
     }
 
     return result;
-  }, [spline]);
-
-  // Start camera animation when entered prop changes
-  useEffect(() => {
-    if (entered) {
-      // Wait a moment before starting camera movement
-      setTimeout(() => {
-        animationActive.current = true;
-        progressRef.current = 0; // Start from beginning
-      }, 1500); // Increased delay for smoother transition
-    }
-  }, [entered]);
-
-  // Camera animation along the spline
-  useFrame((state, delta) => {
-    if (!animationActive.current || !spline) return;
-  
-    // Smooth acceleration at start
-    const maxSpeed = 0.00025; // Slightly slower for better experience
-    if (progressRef.current < 0.1) {
-      // Slower start for smoother entry
-      progressRef.current += maxSpeed * (progressRef.current * 5 + 0.1);
-    } else {
-      // Normal speed through the wormhole
-      progressRef.current += maxSpeed;
-    }
-    
-    // Cap at 0.98 to prevent going beyond the end
-    progressRef.current = Math.min(progressRef.current, 0.98);
-    
-    // Get position on the spline
-    const p = progressRef.current;
-    
-    // Get current position
-    const pos = spline.getPointAt(p);
-    
-    // Look ahead calculation - look in the direction we're moving
-    const lookAheadAmount = 0.01;
-    const lookAhead = Math.min(p + lookAheadAmount, 0.99);
-    const lookAt = spline.getPointAt(lookAhead);
-    
-    // Camera setup
-    camera.position.copy(pos);
-    camera.lookAt(lookAt);
-    
-    // Add subtle camera roll effect
-    const time = state.clock.getElapsedTime();
-    const roll = Math.sin(time * 0.5) * 0.03;
-    camera.up.set(Math.sin(roll), Math.cos(roll), 0);
-  });
+  }, [visibleSpline]);
 
   return (
     <group>
