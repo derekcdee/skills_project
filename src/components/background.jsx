@@ -70,13 +70,13 @@ function Wormhole({ visible }) {
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
     // Scale down the points to fit our scene better - adjusted for smoother path
-    const scale = 0.6; 
+    const scale = 0.7; 
     const rawPoints = createSplinePoints();
     
     // Enhanced point processing for smoother turns
     const scaledPoints = [];
     const tempPoints = rawPoints.map(p => 
-      new THREE.Vector3(p.x * scale, p.y * scale * 0.4, p.z * scale)
+      new THREE.Vector3(p.x * scale, p.y * scale *.9, p.z * scale)
     );
     
     // Add smoothing by averaging nearby points
@@ -103,7 +103,7 @@ function Wormhole({ visible }) {
     
     // Create tube geometry with more segments for smoother curves
     const tubularSegments = 300; // Increased from 200 for smoother tube
-    const radius = 0.7; // Slightly larger radius
+    const radius = 0.6; // Slightly larger radius
     const radialSegments = 20; // Increased for smoother circular cross-section
     const closed = true;
     
@@ -120,7 +120,7 @@ function Wormhole({ visible }) {
 
   // Create boxes along the path
   const boxes = useMemo(() => {
-    const numBoxes = 100; // More boxes for better visual effect
+    const numBoxes = 350; // More boxes for better visual effect
     const size = 0.075;
     const result = [];
 
@@ -131,8 +131,9 @@ function Wormhole({ visible }) {
       const pos = spline.getPointAt(p);
       
       // Keep boxes closer to tube center - reduced randomness
-      pos.x += (Math.random() - 0.5) * 0.3;
-      pos.z += (Math.random() - 0.5) * 0.3;
+      pos.x += (Math.random() - 0.5) * 0.8;
+      pos.y += (Math.random() - 0.5) * 0.8;
+      pos.z += (Math.random() - 0.5) * 0.8;
       
       const rotX = Math.random() * Math.PI;
       const rotY = Math.random() * Math.PI;
