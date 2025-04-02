@@ -70,10 +70,10 @@ function Wormhole({ visible }) {
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
     // Scale down the points to fit our scene better - adjusted for straighter path
-    const scale = 0.12; // Smaller scale makes it straighter relatively
+    const scale = 0.3; // Smaller scale makes it straighter relatively
     const rawPoints = createSplinePoints();
     const scaledPoints = rawPoints.map(p => 
-      new THREE.Vector3(p.x * scale, p.y * scale, p.z * scale)
+      new THREE.Vector3(p.x * scale, p.y * scale *.5, p.z * scale)
     );
     
     // Create the curve
@@ -81,8 +81,8 @@ function Wormhole({ visible }) {
     curve.closed = true;
     
     // Create tube geometry - increased radius to keep camera inside better
-    const tubularSegments = 300; // Higher segment count for smoother tube
-    const radius = 0.8; // Increased radius 
+    const tubularSegments = 200; // Higher segment count for smoother tube
+    const radius = .6; // Increased radius 
     const radialSegments = 16;
     const closed = true;
     
@@ -142,7 +142,7 @@ function Wormhole({ visible }) {
     if (!visible || !spline) return;
 
     // Slower movement for better control
-    progressRef.current += 0.0003;
+    progressRef.current += 0.0001;
     if (progressRef.current >= 1) progressRef.current = 0;
     
     // Get position on the spline
@@ -161,11 +161,6 @@ function Wormhole({ visible }) {
     // Update camera position using exact spline position
     camera.position.copy(pos);
     camera.lookAt(lookAt);
-    
-    // Slowly rotate the tube for additional effect
-    if (tubeRef.current) {
-      tubeRef.current.rotation.z += 0.0002; // Slower rotation
-    }
   });
 
   // Reset camera position when visibility changes
@@ -356,9 +351,9 @@ const Background = () => {
                 {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={1.5}
-                        luminanceThreshold={0.002}
-                        luminanceSmoothing={0.4}
+                        intensity={entered ? 1 : 1.5}
+                        luminanceThreshold={0.001}
+                        luminanceSmoothing={0.2}
                         radius={0}
                     />
                 </EffectComposer>
