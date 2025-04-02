@@ -160,11 +160,11 @@ function Wormhole({ visible }) {
   }, [camera]);
 
   // Camera animation along the spline - improved to stay on track
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!visible || !spline) return;
 
-    // Slower movement for better control
-    progressRef.current += 0.0001;
+    // Faster movement for more exciting ride
+    progressRef.current += 0.00025; // Increased from 0.0001 for faster movement
     if (progressRef.current >= 1) progressRef.current = 0;
     
     // Get position on the spline
@@ -188,15 +188,77 @@ function Wormhole({ visible }) {
     const lookAhead = (p + adaptiveLookAhead) % 1;
     const lookAt = spline.getPointAt(lookAhead);
     
-    // Smooth camera position with subtle up vector adjustment
+    // Determine turn direction (left or right)
+    // We can use the cross product of current tangent and next tangent
+    // The y component tells us if we're turning left (positive) or right (negative)
+    const crossProduct = new THREE.Vector3().crossVectors(tangent, nextTangent);
+    const turnDirection = Math.sign(crossProduct.y);
+    
+    // Calculate banking angle based on turn sharpness
+    // Sharper turns = more banking, up to about 15 degrees (0.26 radians)
+    const bankAmount = turnDirection * (1 - Math.min(1, turnSharpness)) * 0.26;
+    
+    // Store previous values for smoothing
+    if (!camera.userData.prevRoll) {
+      camera.userData.prevRoll = 0;
+      camera.userData.prevPos = pos.clone();
+      camera.userData.prevLookAt = lookAt.clone();
+      camera.userData.prevUp = new THREE.Vector3(0, 1, 0);
+    }
+    
+    // Smooth the banking with damped interpolation
+    const targetRoll = bankAmount;
+    const currentRoll = camera.userData.prevRoll;
+    const smoothedRoll = currentRoll + (targetRoll - currentRoll) * Math.min(1, delta * 4);
+    camera.userData.prevRoll = smoothedRoll;
+    
+    // Calculate up vector with banking
     const up = new THREE.Vector3(0, 1, 0);
-    const normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+    
+    // Rotate the up vector around the forward direction to create banking
+    const bankMatrix = new THREE.Matrix4().makeRotationAxis(tangent, smoothedRoll);
+    const bankedUp = up.clone().applyMatrix4(bankMatrix);
+    
+    // Get normal and adjust up vector for smooth path following
+    const normal = new THREE.Vector3().crossVectors(tangent, right).normalize();
     const adjustedUp = new THREE.Vector3().crossVectors(normal, tangent).normalize();
     
+    // Blend between banked up and adjusted up for smooth transitions
+    const finalUp = new THREE.Vector3().addVectors(
+      bankedUp.multiplyScalar(0.7),
+      adjustedUp.multiplyScalar(0.3)
+    ).normalize();
+    
+    // Smooth camera movement with spring-like interpolation
+    const smoothFactor = Math.min(1, delta * 10); // Delta-based smoothing
+    const smoothedPos = new THREE.Vector3().lerpVectors(
+      camera.userData.prevPos,
+      pos,
+      smoothFactor
+    );
+    
+    const smoothedLookAt = new THREE.Vector3().lerpVectors(
+      camera.userData.prevLookAt,
+      lookAt,
+      smoothFactor
+    );
+    
+    const smoothedUp = new THREE.Vector3().lerpVectors(
+      camera.userData.prevUp,
+      finalUp,
+      smoothFactor
+    ).normalize();
+    
     // Update camera
-    camera.position.copy(pos);
-    camera.lookAt(lookAt);
-    camera.up.copy(adjustedUp);
+    camera.position.copy(smoothedPos);
+    camera.lookAt(smoothedLookAt);
+    camera.up.copy(smoothedUp);
+    
+    // Store current values for next frame
+    camera.userData.prevPos = smoothedPos.clone();
+    camera.userData.prevLookAt = smoothedLookAt.clone();
+    camera.userData.prevUp = smoothedUp.clone();
   });
 
   // Reset camera position when visibility changes
@@ -381,7 +443,7 @@ const Background = () => {
                         attach="fog"
                         color="#000000"
                         near={1.3}
-                        far={3}
+                        far={2.1}
                     />
                 )}
 
