@@ -222,13 +222,27 @@ function Wormhole({ visible }) {
       </mesh>
 
       {/* Boxes along the path */}
-      {boxes.map((box, i) => (
-        <mesh key={i} position={box.position} rotation={box.rotation}>
-          <boxGeometry args={[0.075, 0.075, 0.075]} />
-          <meshBasicMaterial visible={false} />
-          <Edges color={new THREE.Color().setHSL(box.hue, 1, 0.5)} />
-        </mesh>
-      ))}
+          {boxes.map((box, i) => {
+              // Distance-based visibility check
+              const boxPos = new THREE.Vector3(...box.position);
+              const distanceFromCamera = (camera) ?
+                  boxPos.distanceTo(camera.position) : 0;
+
+              return (
+                  <mesh
+                      key={i}
+                      position={box.position}
+                      rotation={box.rotation}
+                  >
+                      <boxGeometry args={[0.075, 0.075, 0.075]} />
+                      <meshBasicMaterial
+                          wireframe={true}
+                          color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
+                          fog={true} // Explicitly enable fog for this material
+                      />
+                  </mesh>
+              );
+          })}
     </group>
   );
 }
@@ -359,6 +373,16 @@ const Background = () => {
                 dpr={[1, 2]}
             >
                 <color attach="background" args={['#000000']} />
+
+                {/* Fog - only active during wormhole */}
+                {entered && (
+                    <fog
+                        attach="fog"
+                        color="#000000"
+                        near={1.3}
+                        far={3}
+                    />
+                )}
 
                 {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
