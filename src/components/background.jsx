@@ -3,7 +3,6 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment } from '@react-three/drei';
 import '../css/site.css';
 
-// This component represents our 3D shape
 function Shape() {
     const meshRef = useRef();
 
@@ -44,8 +43,17 @@ const Background = () => {
                 {/* 3D Objects */}
                 <Shape />
 
-                {/* Controls */}
-                <OrbitControls enableZoom={false} />
+                {/* Controls with full navigation enabled */}
+                <OrbitControls 
+                    enableZoom={true}
+                    enablePan={true}
+                    enableRotate={true}
+                    minDistance={1}
+                    maxDistance={10}
+                    zoomSpeed={0.5}
+                    panSpeed={0.8}
+                    rotateSpeed={0.4}
+                />
 
                 {/* Environment */}
                 <Environment preset="city" />
