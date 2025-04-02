@@ -64,14 +64,13 @@ const createSplinePoints = () => {
 function Wormhole({ visible }) {
   const { camera } = useThree();
   const tubeRef = useRef();
-  const boxesRef = useRef([]);
   const progressRef = useRef(0);
   const initialCameraPos = useRef([0, 0, 3]);
 
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
-    // Scale down the points to fit our scene better
-    const scale = 0.15;
+    // Scale down the points to fit our scene better - adjusted for straighter path
+    const scale = 0.12; // Smaller scale makes it straighter relatively
     const rawPoints = createSplinePoints();
     const scaledPoints = rawPoints.map(p => 
       new THREE.Vector3(p.x * scale, p.y * scale, p.z * scale)
@@ -81,9 +80,9 @@ function Wormhole({ visible }) {
     const curve = new THREE.CatmullRomCurve3(scaledPoints);
     curve.closed = true;
     
-    // Create tube geometry
-    const tubularSegments = 222;
-    const radius = 0.65;
+    // Create tube geometry - increased radius to keep camera inside better
+    const tubularSegments = 300; // Higher segment count for smoother tube
+    const radius = 0.8; // Increased radius 
     const radialSegments = 16;
     const closed = true;
     
@@ -100,18 +99,19 @@ function Wormhole({ visible }) {
 
   // Create boxes along the path
   const boxes = useMemo(() => {
-    const numBoxes = 55;
+    const numBoxes = 100; // More boxes for better visual effect
     const size = 0.075;
-    const boxGeometry = new THREE.BoxGeometry(size, size, size);
     const result = [];
 
     if (!spline) return [];
 
     for (let i = 0; i < numBoxes; i++) {
-      const p = (i / numBoxes + Math.random() * 0.1) % 1;
+      const p = (i / numBoxes + Math.random() * 0.05) % 1; // Reduced randomness
       const pos = spline.getPointAt(p);
-      pos.x += Math.random() - 0.4;
-      pos.z += Math.random() - 0.4;
+      
+      // Keep boxes closer to tube center - reduced randomness
+      pos.x += (Math.random() - 0.5) * 0.3;
+      pos.z += (Math.random() - 0.5) * 0.3;
       
       const rotX = Math.random() * Math.PI;
       const rotY = Math.random() * Math.PI;
@@ -137,26 +137,34 @@ function Wormhole({ visible }) {
     }
   }, [camera]);
 
-  // Camera animation along the spline
+  // Camera animation along the spline - improved to stay on track
   useFrame((state) => {
     if (!visible || !spline) return;
 
-    // Store the progress along the spline
-    progressRef.current += 0.0005;
+    // Slower movement for better control
+    progressRef.current += 0.0003;
     if (progressRef.current >= 1) progressRef.current = 0;
     
     // Get position on the spline
     const p = progressRef.current;
+    
+    // Get current position and tangent
     const pos = spline.getPointAt(p);
-    const lookAt = spline.getPointAt((p + 0.03) % 1);
-
-    // Update camera position and target
+    
+    // Calculate look-ahead position with smaller offset to follow curve better
+    const lookAhead = (p + 0.01) % 1;
+    const lookAt = spline.getPointAt(lookAhead);
+    
+    // Get tube direction at this point to keep camera centered
+    const tangent = spline.getTangentAt(p);
+    
+    // Update camera position using exact spline position
     camera.position.copy(pos);
     camera.lookAt(lookAt);
     
     // Slowly rotate the tube for additional effect
     if (tubeRef.current) {
-      tubeRef.current.rotation.z += 0.0005;
+      tubeRef.current.rotation.z += 0.0002; // Slower rotation
     }
   });
 
@@ -176,7 +184,11 @@ function Wormhole({ visible }) {
       {/* Tube wireframe */}
       <mesh ref={tubeRef}>
         <primitive object={tubeGeometry} attach="geometry" />
-        <meshBasicMaterial color="#ff0000" wireframe={true} />
+        <meshBasicMaterial 
+          color="#3080ff" 
+          wireframe={true} 
+          wireframeLinewidth={1}
+        />
       </mesh>
 
       {/* Boxes along the path */}
@@ -276,9 +288,11 @@ function EnterBox({ onEnter }) {
             >
                 <boxGeometry args={[1.5, 0.8, 0.1]} />
                 <meshStandardMaterial 
-                    color={hovered ? '#444444' : '#ffffff'} 
-                    metalness={0.5}
-                    roughness={0.2}
+                    color={hovered ? '#eeeeee' : '#ffffff'} 
+                    metalness={0.3}  // Reduced metalness
+                    roughness={0.1}  // Reduced roughness for more shine
+                    emissive={hovered ? "#bbbbbb" : "#cccccc"}  // Add emissive glow
+                    emissiveIntensity={.3}  // Control the glow strength
                 />
                 <TextDecal />
             </mesh>
