@@ -61,51 +61,47 @@ const createSplinePoints = () => {
 };
 
 // Wormhole component
-function Wormhole({ visible }) {
+function Wormhole({ visible, entered }) {
   const { camera } = useThree();
   const tubeRef = useRef();
   const progressRef = useRef(0);
   const initialCameraPos = useRef([0, 0, 3]);
+  const animationActive = useRef(false);
 
   // Create spline and tube
   const [spline, tubeGeometry] = useMemo(() => {
-    // Scale down the points to fit our scene better - adjusted for smoother path
-    const scale = 1.1; 
-    const rawPoints = createSplinePoints();
-    
-    // Enhanced point processing for smoother turns
-    const scaledPoints = [];
-    const tempPoints = rawPoints.map(p => 
-      new THREE.Vector3(p.x * scale, p.y * scale *.9, p.z * scale)
-    );
-    
-    // Add smoothing by averaging nearby points
-    for (let i = 0; i < tempPoints.length; i++) {
-      const p = tempPoints[i].clone();
-      
-      // Smooth by averaging with neighboring points
-      if (i > 0 && i < tempPoints.length - 1) {
-        const prev = tempPoints[i-1];
-        const next = tempPoints[i+1];
-        
-        // Weighted average for smoother transitions
-        p.x = p.x * 0.6 + (prev.x + next.x) * 0.2;
-        p.y = p.y * 0.6 + (prev.y + next.y) * 0.2;
-        p.z = p.z * 0.6 + (prev.z + next.z) * 0.2;
-      }
-      
-      scaledPoints.push(p);
-    }
+    // Create a new non-looping path that starts behind the enter button
+    const newPathPoints = [
+      // Start further behind the enter button (more negative Z)
+      new THREE.Vector3(0, 0, -3), 
+      // Initial straight section going away from camera (negative Z)
+      new THREE.Vector3(0, 0, -6),
+      new THREE.Vector3(0, 0, -10),
+      new THREE.Vector3(0, 0, -14),
+      // Begin gentle curves further away
+      new THREE.Vector3(1, 0.5, -18),
+      new THREE.Vector3(2, 1, -22),
+      new THREE.Vector3(1, 2, -26),
+      new THREE.Vector3(-1, 1, -30),
+      new THREE.Vector3(-2, -1, -34),
+      new THREE.Vector3(0, -2, -38),
+      new THREE.Vector3(2, -1, -42),
+      new THREE.Vector3(1, 1, -46),
+      // Exit straight section
+      new THREE.Vector3(0, 0, -50),
+      new THREE.Vector3(0, 0, -55),
+      new THREE.Vector3(0, 0, -60)
+    ];
     
     // Create a smoother curve with more interpolation points
-    const curve = new THREE.CatmullRomCurve3(scaledPoints);
-    curve.closed = true;
+    const curve = new THREE.CatmullRomCurve3(newPathPoints);
+    curve.closed = false; // Not a loop
     
     // Create tube geometry with more segments for smoother curves
-    const tubularSegments = 300; // Increased from 200 for smoother tube
-    const radius = 0.6; // Slightly larger radius
-    const radialSegments = 20; // Increased for smoother circular cross-section
-    const closed = true;
+    const tubularSegments = 300;
+    const radius = 1.2; // Wider radius to accommodate camera
+    const radialSegments = 24; // Increased for smoother circular cross-section
+    const closed = false; // Not a closed tube
     
     const geometry = new THREE.TubeGeometry(
       curve,
@@ -114,58 +110,80 @@ function Wormhole({ visible }) {
       radialSegments,
       closed
     );
-
+  
     return [curve, geometry];
   }, []);
 
   // Create boxes along the path
   const boxes = useMemo(() => {
-    const numBoxes = 350; // More boxes for better visual effect
-    const size = 0.075;
+    const numBoxes = 450; // More boxes for longer path
     const result = [];
 
     if (!spline) return [];
 
     for (let i = 0; i < numBoxes; i++) {
-      const p = (i / numBoxes + Math.random() * 0.05) % 1; // Reduced randomness
+      // Distribute evenly along the path (no looping)
+      const p = i / numBoxes;
       const pos = spline.getPointAt(p);
       
-      // Keep boxes closer to tube center - reduced randomness
-      pos.x += (Math.random() - 0.5) * 0.8;
-      pos.y += (Math.random() - 0.5) * 0.8;
-      pos.z += (Math.random() - 0.5) * 0.8;
+      // Keep boxes closer to tube walls for tunnel effect
+      const randomDirection = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 0.5
+      ).normalize();
+      
+      // Scale determines how close to the tube walls
+      const scale = 0.7 + Math.random() * 0.3;
+      pos.x += randomDirection.x * scale;
+      pos.y += randomDirection.y * scale;
+      pos.z += randomDirection.z * 0.1; // Minimal z-axis deviation
       
       const rotX = Math.random() * Math.PI;
       const rotY = Math.random() * Math.PI;
       const rotZ = Math.random() * Math.PI;
       
       // Calculate color based on position along path
-      const hue = 0.7 - p;
+      const hue = 0.6 - p * 0.3; // Subtle color change along path
       
       result.push({
         position: [pos.x, pos.y, pos.z],
         rotation: [rotX, rotY, rotZ],
-        hue
+        hue,
+        scale: 0.05 + Math.random() * 0.07
       });
     }
 
     return result;
   }, [spline]);
 
-  // Save initial camera position when first mounted
+  // Start camera animation when entered prop changes
   useEffect(() => {
-    if (camera) {
-      initialCameraPos.current = [camera.position.x, camera.position.y, camera.position.z];
+    if (entered) {
+      // Wait a moment before starting camera movement
+      setTimeout(() => {
+        animationActive.current = true;
+        progressRef.current = 0; // Start from beginning
+      }, 1500); // Increased delay for smoother transition
     }
-  }, [camera]);
+  }, [entered]);
 
-  // Camera animation along the spline - improved to stay on track
+  // Camera animation along the spline
   useFrame((state, delta) => {
-    if (!visible || !spline) return;
-
-    // Faster movement for more exciting ride
-    progressRef.current += 0.00018; // Increased from 0.0001 for faster movement
-    if (progressRef.current >= 1) progressRef.current = 0;
+    if (!animationActive.current || !spline) return;
+  
+    // Smooth acceleration at start
+    const maxSpeed = 0.00025; // Slightly slower for better experience
+    if (progressRef.current < 0.1) {
+      // Slower start for smoother entry
+      progressRef.current += maxSpeed * (progressRef.current * 5 + 0.1);
+    } else {
+      // Normal speed through the wormhole
+      progressRef.current += maxSpeed;
+    }
+    
+    // Cap at 0.98 to prevent going beyond the end
+    progressRef.current = Math.min(progressRef.current, 0.98);
     
     // Get position on the spline
     const p = progressRef.current;
@@ -173,139 +191,52 @@ function Wormhole({ visible }) {
     // Get current position
     const pos = spline.getPointAt(p);
     
-    // Calculate look-ahead position with adaptive smoothing
-    // Look further ahead on straighter sections and less ahead on curves
-    const tangent = spline.getTangentAt(p);
-    const nextP = (p + 0.01) % 1;
-    const nextTangent = spline.getTangentAt(nextP);
-    
-    // Calculate dot product between current and next tangent
-    // This gives us information about how much the path is turning
-    const turnSharpness = tangent.dot(nextTangent);
-    
-    // Adjust look-ahead based on turn sharpness (smaller look-ahead for sharper turns)
-    const adaptiveLookAhead = Math.max(0.005, Math.min(0.015, 0.01 * turnSharpness));
-    const lookAhead = (p + adaptiveLookAhead) % 1;
+    // Look ahead calculation - look in the direction we're moving
+    const lookAheadAmount = 0.01;
+    const lookAhead = Math.min(p + lookAheadAmount, 0.99);
     const lookAt = spline.getPointAt(lookAhead);
     
-    // Determine turn direction (left or right)
-    // We can use the cross product of current tangent and next tangent
-    // The y component tells us if we're turning left (positive) or right (negative)
-    const crossProduct = new THREE.Vector3().crossVectors(tangent, nextTangent);
-    const turnDirection = Math.sign(crossProduct.y);
+    // Camera setup
+    camera.position.copy(pos);
+    camera.lookAt(lookAt);
     
-    // Calculate banking angle based on turn sharpness
-    // Sharper turns = more banking, up to about 15 degrees (0.26 radians)
-    const bankAmount = turnDirection * (1 - Math.min(1, turnSharpness)) * 0.26;
-    
-    // Store previous values for smoothing
-    if (!camera.userData.prevRoll) {
-      camera.userData.prevRoll = 0;
-      camera.userData.prevPos = pos.clone();
-      camera.userData.prevLookAt = lookAt.clone();
-      camera.userData.prevUp = new THREE.Vector3(0, 1, 0);
-    }
-    
-    // Smooth the banking with damped interpolation
-    const targetRoll = bankAmount;
-    const currentRoll = camera.userData.prevRoll;
-    const smoothedRoll = currentRoll + (targetRoll - currentRoll) * Math.min(1, delta * 4);
-    camera.userData.prevRoll = smoothedRoll;
-    
-    // Calculate up vector with banking
-    const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
-    
-    // Rotate the up vector around the forward direction to create banking
-    const bankMatrix = new THREE.Matrix4().makeRotationAxis(tangent, smoothedRoll);
-    const bankedUp = up.clone().applyMatrix4(bankMatrix);
-    
-    // Get normal and adjust up vector for smooth path following
-    const normal = new THREE.Vector3().crossVectors(tangent, right).normalize();
-    const adjustedUp = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-    
-    // Blend between banked up and adjusted up for smooth transitions
-    const finalUp = new THREE.Vector3().addVectors(
-      bankedUp.multiplyScalar(0.7),
-      adjustedUp.multiplyScalar(0.3)
-    ).normalize();
-    
-    // Smooth camera movement with spring-like interpolation
-    const smoothFactor = Math.min(1, delta * 10); // Delta-based smoothing
-    const smoothedPos = new THREE.Vector3().lerpVectors(
-      camera.userData.prevPos,
-      pos,
-      smoothFactor
-    );
-    
-    const smoothedLookAt = new THREE.Vector3().lerpVectors(
-      camera.userData.prevLookAt,
-      lookAt,
-      smoothFactor
-    );
-    
-    const smoothedUp = new THREE.Vector3().lerpVectors(
-      camera.userData.prevUp,
-      finalUp,
-      smoothFactor
-    ).normalize();
-    
-    // Update camera
-    camera.position.copy(smoothedPos);
-    camera.lookAt(smoothedLookAt);
-    camera.up.copy(smoothedUp);
-    
-    // Store current values for next frame
-    camera.userData.prevPos = smoothedPos.clone();
-    camera.userData.prevLookAt = smoothedLookAt.clone();
-    camera.userData.prevUp = smoothedUp.clone();
+    // Add subtle camera roll effect
+    const time = state.clock.getElapsedTime();
+    const roll = Math.sin(time * 0.5) * 0.03;
+    camera.up.set(Math.sin(roll), Math.cos(roll), 0);
   });
-
-  // Reset camera position when visibility changes
-  useEffect(() => {
-    if (!visible && camera) {
-      const [x, y, z] = initialCameraPos.current;
-      camera.position.set(x, y, z);
-      camera.lookAt(0, 0, 0);
-    }
-  }, [visible, camera]);
-
-  if (!visible) return null;
 
   return (
     <group>
-      {/* Tube wireframe */}
+      {/* Tube wireframe - always visible but opacity based on entered state */}
       <mesh ref={tubeRef}>
         <primitive object={tubeGeometry} attach="geometry" />
         <meshBasicMaterial 
           color="#3080ff" 
           wireframe={true} 
           wireframeLinewidth={1}
+          opacity={entered ? 1 : 0.15}
+          transparent={true}
         />
       </mesh>
 
       {/* Boxes along the path */}
-          {boxes.map((box, i) => {
-              // Distance-based visibility check
-              const boxPos = new THREE.Vector3(...box.position);
-              const distanceFromCamera = (camera) ?
-                  boxPos.distanceTo(camera.position) : 0;
-
-              return (
-                  <mesh
-                      key={i}
-                      position={box.position}
-                      rotation={box.rotation}
-                  >
-                      <boxGeometry args={[0.075, 0.075, 0.075]} />
-                      <meshBasicMaterial
-                          wireframe={true}
-                          color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
-                          fog={true} // Explicitly enable fog for this material
-                      />
-                  </mesh>
-              );
-          })}
+      {boxes.map((box, i) => (
+        <mesh
+          key={i}
+          position={box.position}
+          rotation={box.rotation}
+        >
+          <boxGeometry args={[box.scale, box.scale, box.scale]} />
+          <meshBasicMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
+            fog={true}
+            opacity={entered ? 1 : 0.15}
+            transparent={true}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -369,8 +300,8 @@ function EnterBox({ onEnter }) {
     // Animation for the box
     useFrame((state) => {
         if (clicked) {
-            // Animate box moving away or fading out after click
-            boxRef.current.position.z -= 0.1;
+            // Animate box moving INTO the wormhole (negative Z direction now)
+            boxRef.current.position.z -= 0.15; // Changed from += to -=
             boxRef.current.rotation.y += 0.05;
             boxRef.current.scale.multiplyScalar(0.98);
             
@@ -380,13 +311,13 @@ function EnterBox({ onEnter }) {
             }
         } else {
             // Subtle floating animation when not clicked
-            boxRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.1;
+            boxRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.3;
             boxRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.1;
         }
     });
     
     return (
-        <group ref={boxRef} position={[0, 0, 0]}>
+        <group ref={boxRef} position={[0, 0, 0.4]}>
             <mesh
                 onPointerOver={handlePointerOver}
                 onPointerOut={handlePointerOut}
@@ -396,10 +327,10 @@ function EnterBox({ onEnter }) {
                 <boxGeometry args={[1.5, 0.8, 0.1]} />
                 <meshStandardMaterial 
                     color={hovered ? '#eeeeee' : '#ffffff'} 
-                    metalness={0.3}  // Reduced metalness
-                    roughness={0.1}  // Reduced roughness for more shine
-                    emissive={hovered ? "#bbbbbb" : "#cccccc"}  // Add emissive glow
-                    emissiveIntensity={.3}  // Control the glow strength
+                    metalness={0.3}
+                    roughness={0.1}
+                    emissive={hovered ? "#bbbbbb" : "#cccccc"}
+                    emissiveIntensity={0.3}
                 />
                 <TextDecal />
             </mesh>
@@ -419,10 +350,7 @@ const Background = () => {
     };
     
     return (
-        <div 
-            className="canvas" 
-            style={{ pointerEvents: 'auto' }}
-        >
+        <div className="canvas" style={{ pointerEvents: 'auto' }}>
             <Canvas
                 style={{ 
                     position: 'absolute', 
@@ -437,25 +365,25 @@ const Background = () => {
             >
                 <color attach="background" args={['#000000']} />
 
-                {/* Fog - only active during wormhole */}
+                {/* Fog - only active during wormhole journey */}
                 {entered && (
                     <fog
                         attach="fog"
                         color="#000000"
-                        near={1.3}
-                        far={2.4}
+                        near={2}
+                        far={10}
                     />
                 )}
 
                 {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
                 <ambientLight intensity={0.5} />
+                
+                {/* Wormhole - always visible but with opacity based on entered state */}
+                <Wormhole visible={true} entered={entered} />
 
                 {/* Interactive Enter Box */}
                 {!entered && <EnterBox onEnter={handleEnter} />}
-                
-                {/* Wormhole instead of Shape */}
-                <Wormhole visible={entered} />
 
                 {/* Controls with full navigation enabled - disabled during wormhole */}
                 <OrbitControls 
@@ -473,7 +401,7 @@ const Background = () => {
                 {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={entered ? 1 : 1.5}
+                        intensity={entered ? 1.2 : 1.5}
                         luminanceThreshold={0.001}
                         luminanceSmoothing={0.2}
                         radius={0}
