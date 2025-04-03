@@ -19,12 +19,12 @@ Follow these steps to set up your development environment:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/3d-portfolio-project.git
+   git clone https://github.com/derekcdee/skills_project.git
    ```
 
 2. **Navigate to the project directory:**
    ```bash
-   cd 3d-portfolio-project
+   cd skills_project
    ```
 
 3. **Install dependencies:**
@@ -42,5 +42,6 @@ Follow these steps to set up your development environment:
 ## Usage
 
 Once the development server is running, you can view and interact with the 3D portfolio project in your browser. Explore different visualizations and learn more about the skills displayed.
+
 
 Thank you for visiting this project!
