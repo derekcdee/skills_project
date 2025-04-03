@@ -83,18 +83,18 @@ function Wormhole({ visible, entered }) {
     // Create points for the approach to the wormhole entrance
     const approachPoints = [
       cameraStartPoint,
-      new THREE.Vector3(0, 0, 2),
+      new THREE.Vector3(0, 0, 2), 
       new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, -1.5),
+      new THREE.Vector3(0, 0, -3.5), // Changed from -1.5 to -3.5
     ];
     
     // Main wormhole path points (unchanged)
     const wormholePoints = [
-      new THREE.Vector3(0, 0, -3),
-      new THREE.Vector3(0, 0, -6),
-      new THREE.Vector3(0, 0, -10),
-      new THREE.Vector3(0, 0, -14),
+      new THREE.Vector3(0, 0, -5), // Changed from -3 to -5
+      new THREE.Vector3(0, 0, -8), // Changed from -6 to -8
+      new THREE.Vector3(0, 0, -12), // Changed from -10 to -12
+      new THREE.Vector3(0, 0, -16), // Changed from -14 to -16
       new THREE.Vector3(1, 0.5, -18),
       new THREE.Vector3(2, 1, -22),
       new THREE.Vector3(1, 2, -26),
@@ -144,38 +144,44 @@ function Wormhole({ visible, entered }) {
   // Create flared entrance geometry
   const entranceGeometry = useMemo(() => {
     // The entrance point of the tube
-    const entrancePoint = new THREE.Vector3(0, 0, -3);
+    const entrancePoint = new THREE.Vector3(0, 0, -5); // Changed from -3 to -5
     
     // Create points for the flared shape (in 2D)
     const points = [];
-    const segments = 30; // More segments for smoother curve
+    const segments = 40; // Increased from 15 to 40 for smoother curve
     const tubeRadius = 1.2; // Match the tube radius
-    const flareRadius = 5.0; // Larger maximum radius for more dramatic flare
-    const flareLength = 6.0; // Longer flared section
+    const flareRadius = 6.0; // Larger maximum radius for more dramatic flare
+    const flareLength = 8.0; // Longer flared section
     
-    // Create the flared curve with a pronounced shrinking exponential shape
+    // Create the flared curve with a more dramatic shape
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
       
-      // Use easeInExpo for a shrinking exponential curve
-      // This starts with rapid change and then gradually slows
-      const easeInExpo = t === 0 ? 0 : Math.pow(2, 10 * (t - 1));
+      // More dramatic curve function for better wormhole shape
+      const curveFunction = Math.pow(t, 0.25); 
       
-      // Start with flare radius and shrink down to tube radius
-      // This creates the shrinking exponential curve
-      const radius = flareRadius - (flareRadius - tubeRadius) * easeInExpo;
+      // Enhanced ripple effect that fades out completely at the tube connection
+      const ripple = Math.sin(t * Math.PI * 3) * 0.05 * Math.pow(1 - t, 1.5);
       
-      // The y coordinate determines the length along the flare
-      // Using 1-t to reverse the direction so wide part is toward camera
-      const y = flareLength * (1 - t);
+      // Create a more dramatic curve that connects perfectly with the tube
+      // Use an exponential function for a more natural funnel shape
+      const radius = tubeRadius + (flareRadius - tubeRadius) * Math.pow(1 - t, 2.2) + ripple;
+      
+      // Adjust the y coordinate for a smoother, more natural throat curve
+      const y = flareLength * (1 - t) - 2 * Math.pow(1 - t, 2) * Math.sqrt(t);
       
       points.push(new THREE.Vector2(radius, y));
     }
     
+    // Add a thin rim at the wide end for a more defined edge
+    const rimThickness = 0.15;
+    points.unshift(new THREE.Vector2(flareRadius + rimThickness, flareLength + 0.2));
+    points.unshift(new THREE.Vector2(flareRadius + rimThickness * 0.5, flareLength + 0.3));
+    
     // Create the lathe geometry by rotating the points around the y-axis
     const latheGeometry = new THREE.LatheGeometry(
       points, 
-      36,  // More segments for smoother circular shape
+      48,  // More segments for smoother circular shape
       0,   // Start angle
       Math.PI * 2 // End angle (full circle)
     );
@@ -184,7 +190,6 @@ function Wormhole({ visible, entered }) {
     latheGeometry.rotateX(Math.PI / 2);
     
     // Position the geometry to connect properly with the tube entrance
-    // Move it forward to ensure proper connection
     latheGeometry.translate(entrancePoint.x, entrancePoint.y, entrancePoint.z + 0.05);
     
     return latheGeometry;
@@ -280,7 +285,7 @@ function Wormhole({ visible, entered }) {
           color="#3080ff" 
           wireframe={true} 
           wireframeLinewidth={1}
-          opacity={entered ? 1 : 0.15}
+          opacity={1}
           transparent={true}
         />
       </mesh>
@@ -289,10 +294,10 @@ function Wormhole({ visible, entered }) {
       <mesh>
         <primitive object={entranceGeometry} attach="geometry" />
         <meshBasicMaterial 
-          color="#4090ff" 
+          color="#3080ff" 
           wireframe={true} 
           wireframeLinewidth={1.2}
-          opacity={entered ? 1 : 0.25}
+          opacity={1}
           transparent={true}
         />
       </mesh>
@@ -309,7 +314,7 @@ function Wormhole({ visible, entered }) {
             wireframe={true}
             color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
             fog={true}
-            opacity={entered ? 1 : 0.15}
+            opacity={1}
             transparent={true}
           />
         </mesh>
@@ -443,12 +448,12 @@ const Background = () => {
                 <color attach="background" args={['#000000']} />
 
                 {/* Fog - only active during wormhole journey */}
-                {/* <fog
+                <fog
                     attach="fog"
                     color="#000000"
                     near={2}
                     far={8}
-                /> */}
+                />
 
                 {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
