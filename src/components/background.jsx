@@ -64,6 +64,7 @@ const createSplinePoints = () => {
 function Wormhole({ visible, entered }) {
   const { camera } = useThree();
   const tubeRef = useRef();
+  const entranceRef = useRef(); // Add ref for the entrance mesh
   const progressRef = useRef(0);
   const initialCameraPos = useRef(new THREE.Vector3(0, 0, 3));
   const animationActive = useRef(false);
@@ -290,8 +291,8 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
 
-      {/* Flared entrance to the wormhole */}
-      <mesh>
+      {/* Flared entrance to the wormhole - now with rotation */}
+      <mesh ref={entranceRef}>
         <primitive object={entranceGeometry} attach="geometry" />
         <meshBasicMaterial 
           color="#3080ff" 
@@ -302,7 +303,7 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
       
-      {/* Boxes along the path */}
+      {/* Existing boxes along the path */}
       {boxes.map((box, i) => (
         <mesh
           key={i}
