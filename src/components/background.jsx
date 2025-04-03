@@ -207,6 +207,12 @@ function Wormhole({ visible, entered }) {
 
   // Unified camera animation with consistent speed
   useFrame((state, delta) => {
+    // Rotate the entrance regardless of whether we've entered the wormhole
+    if (entranceRef.current) {
+      // Apply slow rotation on Z and Y axes for a more interesting effect
+      entranceRef.current.rotation.z += delta * 0.1;  // Rotate around z-axis
+    }
+  
     if (!entered || !animationActive.current || !fullPath) return;
     
     // Single consistent speed throughout the entire journey
