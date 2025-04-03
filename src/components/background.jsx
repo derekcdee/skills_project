@@ -141,6 +141,55 @@ function Wormhole({ visible, entered }) {
     return 5 / (5 + 15); // 5 approach points, 15 wormhole points (simplified ratio)
   }, []);
 
+  // Create flared entrance geometry
+  const entranceGeometry = useMemo(() => {
+    // The entrance point of the tube
+    const entrancePoint = new THREE.Vector3(0, 0, -3);
+    
+    // Create points for the flared shape (in 2D)
+    const points = [];
+    const segments = 30; // More segments for smoother curve
+    const tubeRadius = 1.2; // Match the tube radius
+    const flareRadius = 5.0; // Larger maximum radius for more dramatic flare
+    const flareLength = 6.0; // Longer flared section
+    
+    // Create the flared curve with a pronounced shrinking exponential shape
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      
+      // Use easeInExpo for a shrinking exponential curve
+      // This starts with rapid change and then gradually slows
+      const easeInExpo = t === 0 ? 0 : Math.pow(2, 10 * (t - 1));
+      
+      // Start with flare radius and shrink down to tube radius
+      // This creates the shrinking exponential curve
+      const radius = flareRadius - (flareRadius - tubeRadius) * easeInExpo;
+      
+      // The y coordinate determines the length along the flare
+      // Using 1-t to reverse the direction so wide part is toward camera
+      const y = flareLength * (1 - t);
+      
+      points.push(new THREE.Vector2(radius, y));
+    }
+    
+    // Create the lathe geometry by rotating the points around the y-axis
+    const latheGeometry = new THREE.LatheGeometry(
+      points, 
+      36,  // More segments for smoother circular shape
+      0,   // Start angle
+      Math.PI * 2 // End angle (full circle)
+    );
+    
+    // Rotate the geometry to make it face the camera
+    latheGeometry.rotateX(Math.PI / 2);
+    
+    // Position the geometry to connect properly with the tube entrance
+    // Move it forward to ensure proper connection
+    latheGeometry.translate(entrancePoint.x, entrancePoint.y, entrancePoint.z + 0.05);
+    
+    return latheGeometry;
+  }, []);
+
   // Start animation when entered prop changes
   useEffect(() => {
     if (entered) {
@@ -236,6 +285,18 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
 
+      {/* Flared entrance to the wormhole */}
+      <mesh>
+        <primitive object={entranceGeometry} attach="geometry" />
+        <meshBasicMaterial 
+          color="#4090ff" 
+          wireframe={true} 
+          wireframeLinewidth={1.2}
+          opacity={entered ? 1 : 0.25}
+          transparent={true}
+        />
+      </mesh>
+      
       {/* Boxes along the path */}
       {boxes.map((box, i) => (
         <mesh
@@ -382,12 +443,12 @@ const Background = () => {
                 <color attach="background" args={['#000000']} />
 
                 {/* Fog - only active during wormhole journey */}
-                  <fog
-                      attach="fog"
-                      color="#000000"
-                      near={2}
-                      far={8}
-                  />
+                {/* <fog
+                    attach="fog"
+                    color="#000000"
+                    near={2}
+                    far={8}
+                /> */}
 
                 {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
@@ -415,7 +476,7 @@ const Background = () => {
                 {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={1.5}
+                        intensity={1.2}
                         luminanceThreshold={0.001}
                         luminanceSmoothing={0.2}
                         radius={0}
