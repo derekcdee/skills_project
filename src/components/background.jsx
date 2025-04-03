@@ -5,7 +5,6 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import '../css/site.css';
 
-// Spline data for the wormhole path
 const createSplinePoints = () => {
   const curvePath = [
     10.136184463414924, -1.374508746897471, 10.384881573913269,
@@ -47,7 +46,6 @@ const createSplinePoints = () => {
     10.136184463414924, -1.374508746897471, 10.384881573913269
   ];
 
-  // Create points from coordinates
   const points = [];
   for (let p = 0; p < curvePath.length; p += 3) {
     points.push(new THREE.Vector3(
@@ -60,281 +58,467 @@ const createSplinePoints = () => {
   return points;
 };
 
-// Wormhole component
-function Wormhole({ visible }) {
+function Wormhole({ visible, entered }) {
   const { camera } = useThree();
   const tubeRef = useRef();
+  const entranceRef = useRef();
   const progressRef = useRef(0);
-  const initialCameraPos = useRef([0, 0, 3]);
-
-  // Create spline and tube
-  const [spline, tubeGeometry] = useMemo(() => {
-    // Scale down the points to fit our scene better - adjusted for smoother path
-    const scale = 1.1; 
-    const rawPoints = createSplinePoints();
-    
-    // Enhanced point processing for smoother turns
-    const scaledPoints = [];
-    const tempPoints = rawPoints.map(p => 
-      new THREE.Vector3(p.x * scale, p.y * scale *.9, p.z * scale)
-    );
-    
-    // Add smoothing by averaging nearby points
-    for (let i = 0; i < tempPoints.length; i++) {
-      const p = tempPoints[i].clone();
-      
-      // Smooth by averaging with neighboring points
-      if (i > 0 && i < tempPoints.length - 1) {
-        const prev = tempPoints[i-1];
-        const next = tempPoints[i+1];
-        
-        // Weighted average for smoother transitions
-        p.x = p.x * 0.6 + (prev.x + next.x) * 0.2;
-        p.y = p.y * 0.6 + (prev.y + next.y) * 0.2;
-        p.z = p.z * 0.6 + (prev.z + next.z) * 0.2;
-      }
-      
-      scaledPoints.push(p);
+  const initialCameraPos = useRef(new THREE.Vector3(0, 0, 3));
+  const animationActive = useRef(false);
+  
+  useEffect(() => {
+    if (camera) {
+      initialCameraPos.current = camera.position.clone();
     }
+  }, []);
+
+  const [fullPath, tubeGeometry, visibleSpline] = useMemo(() => {
+    const cameraStartPoint = initialCameraPos.current.clone();
     
-    // Create a smoother curve with more interpolation points
-    const curve = new THREE.CatmullRomCurve3(scaledPoints);
-    curve.closed = true;
+    const approachPoints = [
+      cameraStartPoint,
+      new THREE.Vector3(0, 0, 2), 
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, -3.5),
+    ];
     
-    // Create tube geometry with more segments for smoother curves
-    const tubularSegments = 300; // Increased from 200 for smoother tube
-    const radius = 0.6; // Slightly larger radius
-    const radialSegments = 20; // Increased for smoother circular cross-section
-    const closed = true;
+    const wormholePoints = [
+      new THREE.Vector3(0, 0, -5),
+      new THREE.Vector3(0, 0, -8),
+      new THREE.Vector3(0, 0, -12),
+      new THREE.Vector3(0, 0, -16),
+      new THREE.Vector3(1, 0.5, -18),
+      new THREE.Vector3(2, 1, -22),
+      new THREE.Vector3(1, 2, -26),
+      new THREE.Vector3(-1, 1, -30),
+      new THREE.Vector3(-2, -1, -34),
+      new THREE.Vector3(0, -2, -38),
+      new THREE.Vector3(2, -1, -42),
+      new THREE.Vector3(1, 1, -46),
+      new THREE.Vector3(0, 0, -50),
+      new THREE.Vector3(0, 0, -55),
+      new THREE.Vector3(0, 0, -60)
+    ];
+    
+    const allPoints = [...approachPoints, ...wormholePoints];
+    
+    const fullCameraPath = new THREE.CatmullRomCurve3(allPoints);
+    fullCameraPath.closed = false;
+    
+    const visiblePath = new THREE.CatmullRomCurve3(wormholePoints);
+    visiblePath.closed = false;
+    
+    const tubularSegments = 300;
+    const radius = 1.2;
+    const radialSegments = 24;
+    const closed = false;
     
     const geometry = new THREE.TubeGeometry(
-      curve,
+      visiblePath,
       tubularSegments,
       radius,
       radialSegments,
       closed
     );
-
-    return [curve, geometry];
+  
+    return [fullCameraPath, geometry, visiblePath];
   }, []);
 
-  // Create boxes along the path
+  const pathRatio = useMemo(() => {
+    return 5 / (5 + 15);
+  }, []);
+
+  const entranceGeometry = useMemo(() => {
+    const entrancePoint = new THREE.Vector3(0, 0, -5);
+    
+    const points = [];
+    const segments = 40;
+    const tubeRadius = 1.2;
+    const flareRadius = 6.0;
+    const flareLength = 8.0;
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      
+      const curveFunction = Math.pow(t, 0.25); 
+      
+      const ripple = Math.sin(t * Math.PI * 3) * 0.05 * Math.pow(1 - t, 1.5);
+      
+      const radius = tubeRadius + (flareRadius - tubeRadius) * Math.pow(1 - t, 2.2) + ripple;
+      
+      const y = flareLength * (1 - t) - 2 * Math.pow(1 - t, 2) * Math.sqrt(t);
+      
+      points.push(new THREE.Vector2(radius, y));
+    }
+    
+    const rimThickness = 0.15;
+    points.unshift(new THREE.Vector2(flareRadius + rimThickness, flareLength + 0.2));
+    points.unshift(new THREE.Vector2(flareRadius + rimThickness * 0.5, flareLength + 0.3));
+    
+    const latheGeometry = new THREE.LatheGeometry(
+      points, 
+      48,
+      0,
+      Math.PI * 2
+    );
+    
+    latheGeometry.rotateX(Math.PI / 2);
+    
+    latheGeometry.translate(entrancePoint.x, entrancePoint.y, entrancePoint.z + 0.05);
+    
+    return latheGeometry;
+  }, []);
+
+  useEffect(() => {
+    if (entered) {
+      progressRef.current = 0;
+      animationActive.current = true;
+    }
+  }, [entered]);
+
+  useFrame((state, delta) => {
+    if (entranceRef.current) {
+      entranceRef.current.rotation.z += delta * 0.1;
+    }
+  
+    if (!entered || !animationActive.current || !fullPath) return;
+    
+    const speed = 0.16;
+    progressRef.current += delta * speed;
+    
+    progressRef.current = Math.min(progressRef.current, 0.995);
+    
+    const pos = fullPath.getPointAt(progressRef.current);
+    
+    const lookAheadAmount = 0.01;
+    const lookAhead = Math.min(progressRef.current + lookAheadAmount, 0.999);
+    const lookAt = fullPath.getPointAt(lookAhead);
+    
+    camera.position.copy(pos);
+    camera.lookAt(lookAt);
+    
+    const time = state.clock.getElapsedTime();
+    const roll = Math.sin(time * 0.3) * 0.03;
+    camera.up.set(Math.sin(roll), Math.cos(roll), 0);
+  });
+
   const boxes = useMemo(() => {
-    const numBoxes = 350; // More boxes for better visual effect
-    const size = 0.075;
+    const numBoxes = 450;
     const result = [];
 
-    if (!spline) return [];
+    if (!visibleSpline) return [];
 
     for (let i = 0; i < numBoxes; i++) {
-      const p = (i / numBoxes + Math.random() * 0.05) % 1; // Reduced randomness
-      const pos = spline.getPointAt(p);
+      const p = i / numBoxes;
+      const pos = visibleSpline.getPointAt(p);
       
-      // Keep boxes closer to tube center - reduced randomness
-      pos.x += (Math.random() - 0.5) * 0.8;
-      pos.y += (Math.random() - 0.5) * 0.8;
-      pos.z += (Math.random() - 0.5) * 0.8;
+      const randomDirection = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 0.5
+      ).normalize();
+      
+      const scale = 0.7 + Math.random() * 0.3;
+      pos.x += randomDirection.x * scale;
+      pos.y += randomDirection.y * scale;
+      pos.z += randomDirection.z * 0.1;
       
       const rotX = Math.random() * Math.PI;
       const rotY = Math.random() * Math.PI;
       const rotZ = Math.random() * Math.PI;
       
-      // Calculate color based on position along path
-      const hue = 0.7 - p;
+      const baseHue = 0.6 - p * 0.3;
+      const variation1 = Math.sin(p * Math.PI * 8) * 0.15;
+      const variation2 = Math.sin(p * Math.PI * 20) * 0.05;
+      const randomOffset = (Math.random() - 0.5) * 0.1;
+      
+      let hue = (baseHue + variation1 + variation2 + randomOffset) % 1;
+      if (hue < 0) hue += 1;
       
       result.push({
         position: [pos.x, pos.y, pos.z],
         rotation: [rotX, rotY, rotZ],
-        hue
+        hue,
+        scale: 0.05 + Math.random() * 0.07
       });
     }
 
     return result;
-  }, [spline]);
-
-  // Save initial camera position when first mounted
-  useEffect(() => {
-    if (camera) {
-      initialCameraPos.current = [camera.position.x, camera.position.y, camera.position.z];
-    }
-  }, [camera]);
-
-  // Camera animation along the spline - improved to stay on track
-  useFrame((state, delta) => {
-    if (!visible || !spline) return;
-
-    // Faster movement for more exciting ride
-    progressRef.current += 0.00018; // Increased from 0.0001 for faster movement
-    if (progressRef.current >= 1) progressRef.current = 0;
-    
-    // Get position on the spline
-    const p = progressRef.current;
-    
-    // Get current position
-    const pos = spline.getPointAt(p);
-    
-    // Calculate look-ahead position with adaptive smoothing
-    // Look further ahead on straighter sections and less ahead on curves
-    const tangent = spline.getTangentAt(p);
-    const nextP = (p + 0.01) % 1;
-    const nextTangent = spline.getTangentAt(nextP);
-    
-    // Calculate dot product between current and next tangent
-    // This gives us information about how much the path is turning
-    const turnSharpness = tangent.dot(nextTangent);
-    
-    // Adjust look-ahead based on turn sharpness (smaller look-ahead for sharper turns)
-    const adaptiveLookAhead = Math.max(0.005, Math.min(0.015, 0.01 * turnSharpness));
-    const lookAhead = (p + adaptiveLookAhead) % 1;
-    const lookAt = spline.getPointAt(lookAhead);
-    
-    // Determine turn direction (left or right)
-    // We can use the cross product of current tangent and next tangent
-    // The y component tells us if we're turning left (positive) or right (negative)
-    const crossProduct = new THREE.Vector3().crossVectors(tangent, nextTangent);
-    const turnDirection = Math.sign(crossProduct.y);
-    
-    // Calculate banking angle based on turn sharpness
-    // Sharper turns = more banking, up to about 15 degrees (0.26 radians)
-    const bankAmount = turnDirection * (1 - Math.min(1, turnSharpness)) * 0.26;
-    
-    // Store previous values for smoothing
-    if (!camera.userData.prevRoll) {
-      camera.userData.prevRoll = 0;
-      camera.userData.prevPos = pos.clone();
-      camera.userData.prevLookAt = lookAt.clone();
-      camera.userData.prevUp = new THREE.Vector3(0, 1, 0);
-    }
-    
-    // Smooth the banking with damped interpolation
-    const targetRoll = bankAmount;
-    const currentRoll = camera.userData.prevRoll;
-    const smoothedRoll = currentRoll + (targetRoll - currentRoll) * Math.min(1, delta * 4);
-    camera.userData.prevRoll = smoothedRoll;
-    
-    // Calculate up vector with banking
-    const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
-    
-    // Rotate the up vector around the forward direction to create banking
-    const bankMatrix = new THREE.Matrix4().makeRotationAxis(tangent, smoothedRoll);
-    const bankedUp = up.clone().applyMatrix4(bankMatrix);
-    
-    // Get normal and adjust up vector for smooth path following
-    const normal = new THREE.Vector3().crossVectors(tangent, right).normalize();
-    const adjustedUp = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-    
-    // Blend between banked up and adjusted up for smooth transitions
-    const finalUp = new THREE.Vector3().addVectors(
-      bankedUp.multiplyScalar(0.7),
-      adjustedUp.multiplyScalar(0.3)
-    ).normalize();
-    
-    // Smooth camera movement with spring-like interpolation
-    const smoothFactor = Math.min(1, delta * 10); // Delta-based smoothing
-    const smoothedPos = new THREE.Vector3().lerpVectors(
-      camera.userData.prevPos,
-      pos,
-      smoothFactor
-    );
-    
-    const smoothedLookAt = new THREE.Vector3().lerpVectors(
-      camera.userData.prevLookAt,
-      lookAt,
-      smoothFactor
-    );
-    
-    const smoothedUp = new THREE.Vector3().lerpVectors(
-      camera.userData.prevUp,
-      finalUp,
-      smoothFactor
-    ).normalize();
-    
-    // Update camera
-    camera.position.copy(smoothedPos);
-    camera.lookAt(smoothedLookAt);
-    camera.up.copy(smoothedUp);
-    
-    // Store current values for next frame
-    camera.userData.prevPos = smoothedPos.clone();
-    camera.userData.prevLookAt = smoothedLookAt.clone();
-    camera.userData.prevUp = smoothedUp.clone();
-  });
-
-  // Reset camera position when visibility changes
-  useEffect(() => {
-    if (!visible && camera) {
-      const [x, y, z] = initialCameraPos.current;
-      camera.position.set(x, y, z);
-      camera.lookAt(0, 0, 0);
-    }
-  }, [visible, camera]);
-
-  if (!visible) return null;
+  }, [visibleSpline]);
 
   return (
     <group>
-      {/* Tube wireframe */}
       <mesh ref={tubeRef}>
         <primitive object={tubeGeometry} attach="geometry" />
-        <meshBasicMaterial 
-          color="#3080ff" 
+        <meshStandardMaterial 
+          color="#00aa00" 
           wireframe={true} 
-          wireframeLinewidth={1}
+          wireframeLinewidth={1.2}
+          emissive="#aaaaaa"
+          emissiveIntensity={1.8}
+          opacity={1}
+          transparent={true}
         />
       </mesh>
 
-      {/* Boxes along the path */}
-          {boxes.map((box, i) => {
-              // Distance-based visibility check
-              const boxPos = new THREE.Vector3(...box.position);
-              const distanceFromCamera = (camera) ?
-                  boxPos.distanceTo(camera.position) : 0;
-
-              return (
-                  <mesh
-                      key={i}
-                      position={box.position}
-                      rotation={box.rotation}
-                  >
-                      <boxGeometry args={[0.075, 0.075, 0.075]} />
-                      <meshBasicMaterial
-                          wireframe={true}
-                          color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
-                          fog={true} // Explicitly enable fog for this material
-                      />
-                  </mesh>
-              );
-          })}
+      <mesh ref={entranceRef}>
+        <primitive object={entranceGeometry} attach="geometry" />
+        <meshStandardMaterial 
+          color="#00aa00" 
+          wireframe={true} 
+          wireframeLinewidth={1.5}
+          emissive="#aaaaaa"
+          emissiveIntensity={1.8}
+          opacity={1}
+          transparent={true}
+        />
+      </mesh>
+      
+      <EntranceSuckingCubes visible={visible} entered={entered} />
+      <RainbowCubeField />
+      
+      {boxes.map((box, i) => (
+        <mesh
+          key={i}
+          position={box.position}
+          rotation={box.rotation}
+        >
+          <boxGeometry args={[box.scale, box.scale, box.scale]} />
+          <meshStandardMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(box.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(box.hue, 0.9, 0.4)}
+            emissiveIntensity={1.5}
+            fog={true}
+            opacity={1}
+            transparent={true}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }
 
-// Text decal component for the box face
+function EntranceSuckingCubes({ visible, entered }) {
+  const cubes = useMemo(() => {
+    const count = 150;
+    const result = [];
+    
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 3 + Math.random() * 10;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const z = 5 + Math.random() * 15;
+      
+      const speed = 1 + Math.random() * 3;
+      
+      const scale = 0.05 + Math.random() * 0.1;
+      
+      const hue = Math.random();
+      
+      result.push({
+        position: [x, y, z],
+        initialPosition: [x, y, z],
+        rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2],
+        rotationSpeed: [(Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0],
+        speed,
+        scale,
+        hue,
+        offset: Math.random() * Math.PI * 2
+      });
+    }
+    
+    return result;
+  }, []);
+  
+  const cubeRefs = useRef([]);
+  
+  useEffect(() => {
+    cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
+  }, [cubes.length]);
+  
+  useFrame((state, delta) => {
+    if (entered) return;
+    
+    cubes.forEach((cube, i) => {
+      if (cubeRefs.current[i]) {
+        const x = cubeRefs.current[i].position.x;
+        const y = cubeRefs.current[i].position.y;
+        const z = cubeRefs.current[i].position.z;
+        
+        const targetX = 0;
+        const targetY = 0;
+        const targetZ = -7;
+        
+        const distanceToGo = Math.sqrt(
+          Math.pow(targetX - x, 2) + 
+          Math.pow(targetY - y, 2) + 
+          Math.pow(targetZ - z, 2)
+        );
+        
+        const speedFactor = 1 + (5 / (distanceToGo + 1));
+        const moveAmount = delta * cube.speed * speedFactor;
+        
+        const dirX = targetX - x;
+        const dirY = targetY - y;
+        const dirZ = targetZ - z;
+        const length = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+        
+        const time = state.clock.getElapsedTime() + cube.offset;
+        const spiralFactor = Math.max(0, Math.min(1, z / 10)) * 0.5;
+        const spiralX = Math.sin(time * 2) * spiralFactor;
+        const spiralY = Math.cos(time * 2) * spiralFactor;
+        
+        cubeRefs.current[i].position.x += (dirX / length) * moveAmount + spiralX * delta;
+        cubeRefs.current[i].position.y += (dirY / length) * moveAmount + spiralY * delta;
+        cubeRefs.current[i].position.z += (dirZ / length) * moveAmount;
+        
+        cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0] * speedFactor;
+        cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1] * speedFactor;
+        cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2] * speedFactor;
+        
+        if (cubeRefs.current[i].position.z <= -7) {
+          const newAngle = Math.random() * Math.PI * 2;
+          const newRadius = 3 + Math.random() * 10;
+          cubeRefs.current[i].position.x = Math.cos(newAngle) * newRadius;
+          cubeRefs.current[i].position.y = Math.sin(newAngle) * newRadius;
+          cubeRefs.current[i].position.z = 5 + Math.random() * 15;
+        }
+      }
+    });
+  });
+  
+  if (!visible || entered) return null;
+  
+  return (
+    <group>
+      {cubes.map((cube, i) => (
+        <mesh
+          key={`entrance-cube-${i}`}
+          ref={el => cubeRefs.current[i] = el}
+          position={cube.position}
+          rotation={cube.rotation}
+        >
+          <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
+          <meshStandardMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(cube.hue, 0.9, 0.4)}
+            emissiveIntensity={3}
+            opacity={1}
+            transparent={true}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function RainbowCubeField() {
+  const cubes = useMemo(() => {
+    const count = 400;
+    const result = [];
+    
+    for (let i = 0; i < count; i++) {
+      const radius = 5 + Math.random() * 15;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      
+      const x = 15 + Math.random() * 20;
+      const y = radius * Math.sin(phi) * Math.sin(theta) * 0.7;
+      const z = -60 - Math.random() * 20;
+      
+      const rotSpeedX = (Math.random() - 0.5) * 2.0;
+      const rotSpeedY = (Math.random() - 0.5) * 2.0;
+      const rotSpeedZ = (Math.random() - 0.5) * 2.0;
+      
+      const moveSpeed = 1 + Math.random() * 2;
+      
+      const scale = 0.05 + Math.random() * 0.15;
+      
+      const hue = Math.random();
+      
+      result.push({
+        position: [x, y, z],
+        rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2],
+        rotationSpeed: [rotSpeedX, rotSpeedY, rotSpeedZ],
+        moveSpeed,
+        scale,
+        hue
+      });
+    }
+    
+    return result;
+  }, []);
+  
+  const cubeRefs = useRef([]);
+  
+  useEffect(() => {
+    cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
+  }, [cubes.length]);
+  
+  useFrame((state, delta) => {
+    cubes.forEach((cube, i) => {
+      if (cubeRefs.current[i]) {
+        cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0];
+        cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1];
+        cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2];
+        
+        cubeRefs.current[i].position.x -= delta * cube.moveSpeed;
+        
+        if (cubeRefs.current[i].position.x < -30) {
+          cubeRefs.current[i].position.x = 30 + Math.random() * 10;
+          cubeRefs.current[i].position.y = (Math.random() - 0.5) * 20;
+        }
+      }
+    });
+  });
+  
+  return (
+    <group>
+      {cubes.map((cube, i) => (
+        <mesh
+          key={`rainbow-${i}`}
+          ref={el => cubeRefs.current[i] = el}
+          position={cube.position}
+          rotation={cube.rotation}
+        >
+          <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
+          <meshStandardMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(cube.hue, 0.9, 0.4)}
+            emissiveIntensity={2.0}
+            opacity={1}
+            transparent={true}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function TextDecal() {
-  // Create a canvas texture for the text
   const textCanvas = useRef(document.createElement('canvas'));
   const [decalTexture, setDecalTexture] = useState(null);
   
   useEffect(() => {
-    // Set up canvas for rendering text
     const canvas = textCanvas.current;
     canvas.width = 256;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
     
-    // Clear canvas
     ctx.fillStyle = 'rgba(0, 0, 0, 0)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw text
     ctx.font = 'bold 70px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000000';
     ctx.fillText('ENTER', canvas.width / 2, canvas.height / 2);
     
-    // Create texture from canvas
     const texture = new THREE.CanvasTexture(canvas);
     setDecalTexture(texture);
   }, []);
@@ -343,7 +527,7 @@ function TextDecal() {
   
   return (
     <Decal
-      position={[0, 0, 0.051]} // Just slightly in front of the box face
+      position={[0, 0, 0.051]}
       rotation={[0, 0, 0]}
       scale={[1, 0.5, 1]}
       material-map={decalTexture}
@@ -358,7 +542,6 @@ function EnterBox({ onEnter }) {
     const [hovered, setHovered] = useState(false);
     const [clicked, setClicked] = useState(false);
     
-    // Handle hover and click events
     const handlePointerOver = () => setHovered(true);
     const handlePointerOut = () => setHovered(false);
     const handleClick = () => {
@@ -366,27 +549,23 @@ function EnterBox({ onEnter }) {
         onEnter();
     };
     
-    // Animation for the box
     useFrame((state) => {
         if (clicked) {
-            // Animate box moving away or fading out after click
-            boxRef.current.position.z -= 0.1;
+            boxRef.current.position.z -= 0.15;
             boxRef.current.rotation.y += 0.05;
             boxRef.current.scale.multiplyScalar(0.98);
             
-            // Remove box when it's small enough
             if (boxRef.current.scale.x < 0.1) {
                 boxRef.current.visible = false;
             }
         } else {
-            // Subtle floating animation when not clicked
-            boxRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.1;
+            boxRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.3;
             boxRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.1;
         }
     });
     
     return (
-        <group ref={boxRef} position={[0, 0, 0]}>
+        <group ref={boxRef} position={[0, 0, 0.4]}>
             <mesh
                 onPointerOver={handlePointerOver}
                 onPointerOut={handlePointerOut}
@@ -396,10 +575,10 @@ function EnterBox({ onEnter }) {
                 <boxGeometry args={[1.5, 0.8, 0.1]} />
                 <meshStandardMaterial 
                     color={hovered ? '#eeeeee' : '#ffffff'} 
-                    metalness={0.3}  // Reduced metalness
-                    roughness={0.1}  // Reduced roughness for more shine
-                    emissive={hovered ? "#bbbbbb" : "#cccccc"}  // Add emissive glow
-                    emissiveIntensity={.3}  // Control the glow strength
+                    metalness={0.3}
+                    roughness={0.1}
+                    emissive={hovered ? "#bbbbbb" : "#cccccc"}
+                    emissiveIntensity={0.3}
                 />
                 <TextDecal />
             </mesh>
@@ -407,22 +586,28 @@ function EnterBox({ onEnter }) {
     );
 }
 
-// Main background component
-const Background = () => {
+const Background = ({ setExited }) => {
     const [entered, setEntered] = useState(false);
     
     const handleEnter = () => {
-        // Start the main animation after a short delay
         setTimeout(() => {
             setEntered(true);
         }, 1000);
     };
+
+  useEffect(() => {
+    if (entered) {
+      const journeyDuration = 6000;
+      const timer = setTimeout(() => {
+        setExited(true);
+      }, journeyDuration);
+
+      return () => clearTimeout(timer);
+    }
+  }, [entered, setExited]);
     
     return (
-        <div 
-            className="canvas" 
-            style={{ pointerEvents: 'auto' }}
-        >
+        <div className="canvas" style={{ pointerEvents: 'auto' }}>
             <Canvas
                 style={{ 
                     position: 'absolute', 
@@ -437,50 +622,29 @@ const Background = () => {
             >
                 <color attach="background" args={['#000000']} />
 
-                {/* Fog - only active during wormhole */}
-                {entered && (
-                    <fog
-                        attach="fog"
-                        color="#000000"
-                        near={1.3}
-                        far={2.4}
-                    />
-                )}
-
-                {/* Lights */}
-                <pointLight position={[2, 3, 4]} intensity={30} />
-                <ambientLight intensity={0.5} />
-
-                {/* Interactive Enter Box */}
-                {!entered && <EnterBox onEnter={handleEnter} />}
-                
-                {/* Wormhole instead of Shape */}
-                <Wormhole visible={entered} />
-
-                {/* Controls with full navigation enabled - disabled during wormhole */}
-                <OrbitControls 
-                    enableZoom={true}
-                    enablePan={true}
-                    enableRotate={true}
-                    minDistance={1}
-                    maxDistance={10}
-                    zoomSpeed={0.5}
-                    panSpeed={0.8}
-                    rotateSpeed={0.4}
-                    enabled={!entered}
+                <fog
+                    attach="fog"
+                    color="#000000"
+                    near={2}
+                    far={6}
                 />
 
-                {/* Post processing */}
+                <pointLight position={[2, 3, 4]} intensity={30} />
+                <ambientLight intensity={0.5} />
+                
+                <Wormhole visible={true} entered={entered} />
+
+                {!entered && <EnterBox onEnter={handleEnter} />}
+
                 <EffectComposer>
                     <Bloom 
-                        intensity={entered ? 1 : 1.5}
-                        luminanceThreshold={0.001}
-                        luminanceSmoothing={0.2}
-                        radius={0}
+                        intensity={2.0}
+                        luminanceThreshold={0.0}
+                        luminanceSmoothing={0.4}
+                        radius={0.8}
                     />
                 </EffectComposer>
 
-                {/* Environment */}
                 <Environment preset="night" />
             </Canvas>
         </div>
