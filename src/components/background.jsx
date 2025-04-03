@@ -309,6 +309,9 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
       
+      {/* Cubes being sucked into the entrance */}
+      <EntranceSuckingCubes visible={visible} entered={entered} />
+      
       {/* Rainbow cubes at the end of the tunnel */}
       <RainbowCubeField />
       
@@ -324,6 +327,142 @@ function Wormhole({ visible, entered }) {
             wireframe={true}
             color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
             fog={true}
+            opacity={1}
+            transparent={true}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Add this component before the RainbowCubeField component
+
+// Cubes that get sucked into the wormhole entrance
+function EntranceSuckingCubes({ visible, entered }) {
+  const cubes = useMemo(() => {
+    const count = 150;
+    const result = [];
+    
+    // Create cubes that will move toward the entrance
+    for (let i = 0; i < count; i++) {
+      // Start from behind the camera in a wide area
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 3 + Math.random() * 10;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const z = 5 + Math.random() * 15; // Behind the camera (positive Z)
+      
+      // Random movement speeds
+      const speed = 1 + Math.random() * 3;
+      
+      // Box size (similar to existing boxes)
+      const scale = 0.05 + Math.random() * 0.1;
+      
+      // Color - use blues similar to the wormhole
+      const hue = 0.6 + (Math.random() * 0.2) - 0.1; // blues with slight variation
+      
+      result.push({
+        position: [x, y, z],
+        initialPosition: [x, y, z], // Store initial position for reset
+        rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2],
+        rotationSpeed: [(Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0],
+        speed,
+        scale,
+        hue,
+        offset: Math.random() * Math.PI * 2 // Phase offset for motion variation
+      });
+    }
+    
+    return result;
+  }, []);
+  
+  // Animate cube movement
+  const cubeRefs = useRef([]);
+  
+  // Initialize cube ref array
+  useEffect(() => {
+    cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
+  }, [cubes.length]);
+  
+  // Animation for cube movement toward entrance
+  useFrame((state, delta) => {
+    if (entered) return; // Stop the animation if entered
+    
+    // Move cubes toward entrance
+    cubes.forEach((cube, i) => {
+      if (cubeRefs.current[i]) {
+        // Get current position
+        const x = cubeRefs.current[i].position.x;
+        const y = cubeRefs.current[i].position.y;
+        const z = cubeRefs.current[i].position.z;
+        
+        // Calculate direction toward entrance (0,0,-5)
+        const targetX = 0;
+        const targetY = 0;
+        const targetZ = -7;
+        
+        // Move toward entrance with curved trajectory
+        const distanceToGo = Math.sqrt(
+          Math.pow(targetX - x, 2) + 
+          Math.pow(targetY - y, 2) + 
+          Math.pow(targetZ - z, 2)
+        );
+        
+        // Speed increases as it gets closer
+        const speedFactor = 1 + (5 / (distanceToGo + 1));
+        const moveAmount = delta * cube.speed * speedFactor;
+        
+        // Calculate new position
+        const dirX = targetX - x;
+        const dirY = targetY - y;
+        const dirZ = targetZ - z;
+        const length = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+        
+        // Add spiral movement
+        const time = state.clock.getElapsedTime() + cube.offset;
+        const spiralFactor = Math.max(0, Math.min(1, z / 10)) * 0.5; // Stronger spiral further from entrance
+        const spiralX = Math.sin(time * 2) * spiralFactor;
+        const spiralY = Math.cos(time * 2) * spiralFactor;
+        
+        // Move toward entrance with spiral
+        cubeRefs.current[i].position.x += (dirX / length) * moveAmount + spiralX * delta;
+        cubeRefs.current[i].position.y += (dirY / length) * moveAmount + spiralY * delta;
+        cubeRefs.current[i].position.z += (dirZ / length) * moveAmount;
+        
+        // Rotate the cube
+        cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0] * speedFactor;
+        cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1] * speedFactor;
+        cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2] * speedFactor;
+        
+        // Reset position when it reaches the entrance
+        if (cubeRefs.current[i].position.z <= -7) {
+          // Generate new starting position
+          const newAngle = Math.random() * Math.PI * 2;
+          const newRadius = 3 + Math.random() * 10;
+          cubeRefs.current[i].position.x = Math.cos(newAngle) * newRadius;
+          cubeRefs.current[i].position.y = Math.sin(newAngle) * newRadius;
+          cubeRefs.current[i].position.z = 5 + Math.random() * 15;
+        }
+      }
+    });
+  });
+  
+  if (!visible || entered) return null;
+  
+  return (
+    <group>
+      {cubes.map((cube, i) => (
+        <mesh
+          key={`entrance-cube-${i}`}
+          ref={el => cubeRefs.current[i] = el}
+          position={cube.position}
+          rotation={cube.rotation}
+        >
+          <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
+          <meshBasicMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.5)}
             opacity={1}
             transparent={true}
           />
