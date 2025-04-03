@@ -210,7 +210,7 @@ function Wormhole({ visible, entered }) {
     if (!entered || !animationActive.current || !fullPath) return;
     
     // Single consistent speed throughout the entire journey
-    const speed = 0.08;
+    const speed = 0.16;
     progressRef.current += delta * speed;
     
     // Cap at 0.995 to prevent going beyond the end
@@ -422,7 +422,7 @@ function EnterBox({ onEnter }) {
 }
 
 // Main background component
-const Background = () => {
+const Background = ({ setExited }) => {
     const [entered, setEntered] = useState(false);
     
     const handleEnter = () => {
@@ -431,6 +431,18 @@ const Background = () => {
             setEntered(true);
         }, 1000);
     };
+
+  useEffect(() => {
+    if (entered) {
+      // Wait for the journey animation to complete
+      const journeyDuration = 6000; // 15 seconds - adjust based on your animation duration
+      const timer = setTimeout(() => {
+        setExited(true); // Signal that the journey has completed
+      }, journeyDuration);
+
+      return () => clearTimeout(timer);
+    }
+  }, [entered, setExited]);
     
     return (
         <div className="canvas" style={{ pointerEvents: 'auto' }}>
