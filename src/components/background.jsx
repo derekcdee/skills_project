@@ -309,6 +309,9 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
       
+      {/* Rainbow cubes at the end of the tunnel */}
+      <RainbowCubeField />
+      
       {/* Existing boxes along the path */}
       {boxes.map((box, i) => (
         <mesh
@@ -321,6 +324,106 @@ function Wormhole({ visible, entered }) {
             wireframe={true}
             color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
             fog={true}
+            opacity={1}
+            transparent={true}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Add this component before the Wormhole component
+
+// Rainbow cube field component for the end of the tunnel
+function RainbowCubeField() {
+  const cubes = useMemo(() => {
+    const count = 400;
+    const result = [];
+    
+    // Create a field of cubes
+    for (let i = 0; i < count; i++) {
+      // Position cubes starting from the right side
+      const radius = 5 + Math.random() * 15; // Distance from center
+      const theta = Math.random() * Math.PI * 2; // Horizontal angle
+      const phi = Math.random() * Math.PI; // Vertical angle
+      
+      // Position them more on the right side to start
+      const x = 15 + Math.random() * 20; // Start on the right (positive X)
+      const y = radius * Math.sin(phi) * Math.sin(theta) * 0.7; // Y position
+      const z = -60 - Math.random() * 20; // Position at end of tunnel
+      
+      // Random rotation speeds (similar to existing boxes)
+      const rotSpeedX = (Math.random() - 0.5) * 2.0;
+      const rotSpeedY = (Math.random() - 0.5) * 2.0;
+      const rotSpeedZ = (Math.random() - 0.5) * 2.0;
+      
+      // Movement speed for right-to-left motion
+      const moveSpeed = 1 + Math.random() * 2;
+      
+      // Box size (similar to existing boxes)
+      const scale = 0.05 + Math.random() * 0.15;
+      
+      // Rainbow color - full color range
+      const hue = Math.random();
+      
+      result.push({
+        position: [x, y, z],
+        rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2],
+        rotationSpeed: [rotSpeedX, rotSpeedY, rotSpeedZ],
+        moveSpeed,
+        scale,
+        hue
+      });
+    }
+    
+    return result;
+  }, []);
+  
+  // Animate cube rotations
+  const cubeRefs = useRef([]);
+  
+  // Initialize cube ref array
+  useEffect(() => {
+    cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
+  }, [cubes.length]);
+  
+  // Animation for individual cube rotation and movement
+  useFrame((state, delta) => {
+    // Rotate and move individual cubes
+    cubes.forEach((cube, i) => {
+      if (cubeRefs.current[i]) {
+        // Rotate the cube
+        cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0];
+        cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1];
+        cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2];
+        
+        // Move the cube from right to left
+        cubeRefs.current[i].position.x -= delta * cube.moveSpeed;
+        
+        // Reset position when it goes too far left
+        if (cubeRefs.current[i].position.x < -30) {
+          // Reset to right side with slight variation
+          cubeRefs.current[i].position.x = 30 + Math.random() * 10;
+          cubeRefs.current[i].position.y = (Math.random() - 0.5) * 20;
+        }
+      }
+    });
+  });
+  
+  return (
+    <group>
+      {cubes.map((cube, i) => (
+        <mesh
+          key={`rainbow-${i}`}
+          ref={el => cubeRefs.current[i] = el}
+          position={cube.position}
+          rotation={cube.rotation}
+        >
+          <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
+          <meshBasicMaterial
+            wireframe={true}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.5)}
             opacity={1}
             transparent={true}
           />
