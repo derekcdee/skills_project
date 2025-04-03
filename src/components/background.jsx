@@ -269,8 +269,16 @@ function Wormhole({ visible, entered }) {
       const rotY = Math.random() * Math.PI;
       const rotZ = Math.random() * Math.PI;
       
-      // Calculate color based on position along path
-      const hue = 0.6 - p * 0.3; // Subtle color change along path
+      // Calculate color based on position along path with more frequent variation
+      // Add sinusoidal variations at different frequencies for more color cycling
+      const baseHue = 0.6 - p * 0.3; // Base gradient
+      const variation1 = Math.sin(p * Math.PI * 8) * 0.15; // Medium frequency variation
+      const variation2 = Math.sin(p * Math.PI * 20) * 0.05; // High frequency variation
+      const randomOffset = (Math.random() - 0.5) * 0.1; // Small random offset per cube
+      
+      // Combine all variations and wrap to [0,1] range
+      let hue = (baseHue + variation1 + variation2 + randomOffset) % 1;
+      if (hue < 0) hue += 1;
       
       result.push({
         position: [pos.x, pos.y, pos.z],
@@ -283,39 +291,41 @@ function Wormhole({ visible, entered }) {
     return result;
   }, [visibleSpline]);
 
+  // Update the tube and entrance materials in the Wormhole component's return statement
   return (
     <group>
-      {/* Tube wireframe - always visible but opacity based on entered state */}
+      {/* Tube wireframe - now with Matrix green glow */}
       <mesh ref={tubeRef}>
         <primitive object={tubeGeometry} attach="geometry" />
-        <meshBasicMaterial 
-          color="#3080ff" 
+        <meshStandardMaterial 
+          color="#00aa00" 
           wireframe={true} 
-          wireframeLinewidth={1}
+          wireframeLinewidth={1.2}
+          emissive="#aaaaaa"
+          emissiveIntensity={1.8}
           opacity={1}
           transparent={true}
         />
       </mesh>
 
-      {/* Flared entrance to the wormhole - now with rotation */}
+      {/* Flared entrance to the wormhole - matching Matrix green */}
       <mesh ref={entranceRef}>
         <primitive object={entranceGeometry} attach="geometry" />
-        <meshBasicMaterial 
-          color="#3080ff" 
+        <meshStandardMaterial 
+          color="#00aa00" 
           wireframe={true} 
-          wireframeLinewidth={1.2}
+          wireframeLinewidth={1.5}
+          emissive="#aaaaaa"
+          emissiveIntensity={1.8}
           opacity={1}
           transparent={true}
         />
       </mesh>
       
-      {/* Cubes being sucked into the entrance */}
+      {/* Rest of the component remains unchanged */}
       <EntranceSuckingCubes visible={visible} entered={entered} />
-      
-      {/* Rainbow cubes at the end of the tunnel */}
       <RainbowCubeField />
       
-      {/* Existing boxes along the path */}
       {boxes.map((box, i) => (
         <mesh
           key={i}
@@ -323,9 +333,11 @@ function Wormhole({ visible, entered }) {
           rotation={box.rotation}
         >
           <boxGeometry args={[box.scale, box.scale, box.scale]} />
-          <meshBasicMaterial
+          <meshStandardMaterial
             wireframe={true}
-            color={new THREE.Color().setHSL(box.hue, 1, 0.5)}
+            color={new THREE.Color().setHSL(box.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(box.hue, 0.9, 0.4)}
+            emissiveIntensity={1.5}
             fog={true}
             opacity={1}
             transparent={true}
@@ -336,9 +348,7 @@ function Wormhole({ visible, entered }) {
   );
 }
 
-// Add this component before the RainbowCubeField component
-
-// Cubes that get sucked into the wormhole entrance
+// Update the color generation in the EntranceSuckingCubes component
 function EntranceSuckingCubes({ visible, entered }) {
   const cubes = useMemo(() => {
     const count = 150;
@@ -359,8 +369,8 @@ function EntranceSuckingCubes({ visible, entered }) {
       // Box size (similar to existing boxes)
       const scale = 0.05 + Math.random() * 0.1;
       
-      // Color - use blues similar to the wormhole
-      const hue = 0.6 + (Math.random() * 0.2) - 0.1; // blues with slight variation
+      // Rainbow color - full color spectrum instead of just blues
+      const hue = Math.random(); // Full rainbow color range
       
       result.push({
         position: [x, y, z],
@@ -450,6 +460,7 @@ function EntranceSuckingCubes({ visible, entered }) {
   
   if (!visible || entered) return null;
   
+  // Update the material in the EntranceSuckingCubes component's return statement
   return (
     <group>
       {cubes.map((cube, i) => (
@@ -460,9 +471,11 @@ function EntranceSuckingCubes({ visible, entered }) {
           rotation={cube.rotation}
         >
           <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
-          <meshBasicMaterial
+          <meshStandardMaterial
             wireframe={true}
-            color={new THREE.Color().setHSL(cube.hue, 1, 0.5)}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(cube.hue, 0.9, 0.4)}
+            emissiveIntensity={3}
             opacity={1}
             transparent={true}
           />
@@ -550,6 +563,7 @@ function RainbowCubeField() {
     });
   });
   
+  // Update the material in the RainbowCubeField component's return statement
   return (
     <group>
       {cubes.map((cube, i) => (
@@ -560,9 +574,11 @@ function RainbowCubeField() {
           rotation={cube.rotation}
         >
           <boxGeometry args={[cube.scale, cube.scale, cube.scale]} />
-          <meshBasicMaterial
+          <meshStandardMaterial
             wireframe={true}
-            color={new THREE.Color().setHSL(cube.hue, 1, 0.5)}
+            color={new THREE.Color().setHSL(cube.hue, 1, 0.6)}
+            emissive={new THREE.Color().setHSL(cube.hue, 0.9, 0.4)}
+            emissiveIntensity={2.0}
             opacity={1}
             transparent={true}
           />
@@ -713,7 +729,7 @@ const Background = ({ setExited }) => {
                     attach="fog"
                     color="#000000"
                     near={2}
-                    far={8}
+                    far={6}
                 />
 
                 {/* Lights */}
@@ -726,26 +742,13 @@ const Background = ({ setExited }) => {
                 {/* Interactive Enter Box */}
                 {!entered && <EnterBox onEnter={handleEnter} />}
 
-                {/* Controls with full navigation enabled - disabled during wormhole */}
-                <OrbitControls 
-                    enableZoom={true}
-                    enablePan={true}
-                    enableRotate={true}
-                    minDistance={1}
-                    maxDistance={10}
-                    zoomSpeed={0.5}
-                    panSpeed={0.8}
-                    rotateSpeed={0.4}
-                    enabled={!entered}
-                />
-
                 {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={1.2}
-                        luminanceThreshold={0.001}
-                        luminanceSmoothing={0.2}
-                        radius={0}
+                        intensity={2.0}           // Increased from 1.2
+                        luminanceThreshold={0.0}  // Lowered to catch more light
+                        luminanceSmoothing={0.4}  // Increased for smoother glow
+                        radius={0.8}              // Added some radius for broader glow effect
                     />
                 </EffectComposer>
 
