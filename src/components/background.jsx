@@ -5,7 +5,6 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import '../css/site.css';
 
-// Spline data for the wormhole path
 const createSplinePoints = () => {
   const curvePath = [
     10.136184463414924, -1.374508746897471, 10.384881573913269,
@@ -47,7 +46,6 @@ const createSplinePoints = () => {
     10.136184463414924, -1.374508746897471, 10.384881573913269
   ];
 
-  // Create points from coordinates
   const points = [];
   for (let p = 0; p < curvePath.length; p += 3) {
     points.push(new THREE.Vector3(
@@ -60,42 +58,36 @@ const createSplinePoints = () => {
   return points;
 };
 
-// Wormhole component
 function Wormhole({ visible, entered }) {
   const { camera } = useThree();
   const tubeRef = useRef();
-  const entranceRef = useRef(); // Add ref for the entrance mesh
+  const entranceRef = useRef();
   const progressRef = useRef(0);
   const initialCameraPos = useRef(new THREE.Vector3(0, 0, 3));
   const animationActive = useRef(false);
   
-  // Save initial camera position when first mounted
   useEffect(() => {
     if (camera) {
       initialCameraPos.current = camera.position.clone();
     }
   }, []);
 
-  // Create extended spline including camera starting position
   const [fullPath, tubeGeometry, visibleSpline] = useMemo(() => {
-    // Start with camera position and create a smooth path to wormhole
     const cameraStartPoint = initialCameraPos.current.clone();
     
-    // Create points for the approach to the wormhole entrance
     const approachPoints = [
       cameraStartPoint,
       new THREE.Vector3(0, 0, 2), 
       new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, -3.5), // Changed from -1.5 to -3.5
+      new THREE.Vector3(0, 0, -3.5),
     ];
     
-    // Main wormhole path points (unchanged)
     const wormholePoints = [
-      new THREE.Vector3(0, 0, -5), // Changed from -3 to -5
-      new THREE.Vector3(0, 0, -8), // Changed from -6 to -8
-      new THREE.Vector3(0, 0, -12), // Changed from -10 to -12
-      new THREE.Vector3(0, 0, -16), // Changed from -14 to -16
+      new THREE.Vector3(0, 0, -5),
+      new THREE.Vector3(0, 0, -8),
+      new THREE.Vector3(0, 0, -12),
+      new THREE.Vector3(0, 0, -16),
       new THREE.Vector3(1, 0.5, -18),
       new THREE.Vector3(2, 1, -22),
       new THREE.Vector3(1, 2, -26),
@@ -109,18 +101,14 @@ function Wormhole({ visible, entered }) {
       new THREE.Vector3(0, 0, -60)
     ];
     
-    // Combine all points for the full camera path
     const allPoints = [...approachPoints, ...wormholePoints];
     
-    // Create the full path for camera movement
     const fullCameraPath = new THREE.CatmullRomCurve3(allPoints);
     fullCameraPath.closed = false;
     
-    // Create a separate visible tube that starts at the wormhole entrance
     const visiblePath = new THREE.CatmullRomCurve3(wormholePoints);
     visiblePath.closed = false;
     
-    // Create tube geometry with more segments for smoother curves
     const tubularSegments = 300;
     const radius = 1.2;
     const radialSegments = 24;
@@ -137,110 +125,84 @@ function Wormhole({ visible, entered }) {
     return [fullCameraPath, geometry, visiblePath];
   }, []);
 
-  // Calculate the path ratio - what portion of the full path is the approach vs the wormhole
   const pathRatio = useMemo(() => {
-    return 5 / (5 + 15); // 5 approach points, 15 wormhole points (simplified ratio)
+    return 5 / (5 + 15);
   }, []);
 
-  // Create flared entrance geometry
   const entranceGeometry = useMemo(() => {
-    // The entrance point of the tube
-    const entrancePoint = new THREE.Vector3(0, 0, -5); // Changed from -3 to -5
+    const entrancePoint = new THREE.Vector3(0, 0, -5);
     
-    // Create points for the flared shape (in 2D)
     const points = [];
-    const segments = 40; // Increased from 15 to 40 for smoother curve
-    const tubeRadius = 1.2; // Match the tube radius
-    const flareRadius = 6.0; // Larger maximum radius for more dramatic flare
-    const flareLength = 8.0; // Longer flared section
+    const segments = 40;
+    const tubeRadius = 1.2;
+    const flareRadius = 6.0;
+    const flareLength = 8.0;
     
-    // Create the flared curve with a more dramatic shape
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
       
-      // More dramatic curve function for better wormhole shape
       const curveFunction = Math.pow(t, 0.25); 
       
-      // Enhanced ripple effect that fades out completely at the tube connection
       const ripple = Math.sin(t * Math.PI * 3) * 0.05 * Math.pow(1 - t, 1.5);
       
-      // Create a more dramatic curve that connects perfectly with the tube
-      // Use an exponential function for a more natural funnel shape
       const radius = tubeRadius + (flareRadius - tubeRadius) * Math.pow(1 - t, 2.2) + ripple;
       
-      // Adjust the y coordinate for a smoother, more natural throat curve
       const y = flareLength * (1 - t) - 2 * Math.pow(1 - t, 2) * Math.sqrt(t);
       
       points.push(new THREE.Vector2(radius, y));
     }
     
-    // Add a thin rim at the wide end for a more defined edge
     const rimThickness = 0.15;
     points.unshift(new THREE.Vector2(flareRadius + rimThickness, flareLength + 0.2));
     points.unshift(new THREE.Vector2(flareRadius + rimThickness * 0.5, flareLength + 0.3));
     
-    // Create the lathe geometry by rotating the points around the y-axis
     const latheGeometry = new THREE.LatheGeometry(
       points, 
-      48,  // More segments for smoother circular shape
-      0,   // Start angle
-      Math.PI * 2 // End angle (full circle)
+      48,
+      0,
+      Math.PI * 2
     );
     
-    // Rotate the geometry to make it face the camera
     latheGeometry.rotateX(Math.PI / 2);
     
-    // Position the geometry to connect properly with the tube entrance
     latheGeometry.translate(entrancePoint.x, entrancePoint.y, entrancePoint.z + 0.05);
     
     return latheGeometry;
   }, []);
 
-  // Start animation when entered prop changes
   useEffect(() => {
     if (entered) {
-      // Reset progress and start animation
       progressRef.current = 0;
       animationActive.current = true;
     }
   }, [entered]);
 
-  // Unified camera animation with consistent speed
   useFrame((state, delta) => {
-    // Rotate the entrance regardless of whether we've entered the wormhole
     if (entranceRef.current) {
-      // Apply slow rotation on Z and Y axes for a more interesting effect
-      entranceRef.current.rotation.z += delta * 0.1;  // Rotate around z-axis
+      entranceRef.current.rotation.z += delta * 0.1;
     }
   
     if (!entered || !animationActive.current || !fullPath) return;
     
-    // Single consistent speed throughout the entire journey
     const speed = 0.16;
     progressRef.current += delta * speed;
     
-    // Cap at 0.995 to prevent going beyond the end
     progressRef.current = Math.min(progressRef.current, 0.995);
     
-    // Get position on the spline
     const pos = fullPath.getPointAt(progressRef.current);
     
-    // Look ahead calculation
     const lookAheadAmount = 0.01;
     const lookAhead = Math.min(progressRef.current + lookAheadAmount, 0.999);
     const lookAt = fullPath.getPointAt(lookAhead);
     
-    // Camera setup
     camera.position.copy(pos);
     camera.lookAt(lookAt);
     
-    // Add subtle camera roll effect
     const time = state.clock.getElapsedTime();
     const roll = Math.sin(time * 0.3) * 0.03;
     camera.up.set(Math.sin(roll), Math.cos(roll), 0);
   });
 
-  // Create boxes along the visible path only
   const boxes = useMemo(() => {
     const numBoxes = 450;
     const result = [];
@@ -248,35 +210,29 @@ function Wormhole({ visible, entered }) {
     if (!visibleSpline) return [];
 
     for (let i = 0; i < numBoxes; i++) {
-      // Distribute evenly along the path (no looping)
       const p = i / numBoxes;
       const pos = visibleSpline.getPointAt(p);
       
-      // Keep boxes closer to tube walls for tunnel effect
       const randomDirection = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 0.5
       ).normalize();
       
-      // Scale determines how close to the tube walls
       const scale = 0.7 + Math.random() * 0.3;
       pos.x += randomDirection.x * scale;
       pos.y += randomDirection.y * scale;
-      pos.z += randomDirection.z * 0.1; // Minimal z-axis deviation
+      pos.z += randomDirection.z * 0.1;
       
       const rotX = Math.random() * Math.PI;
       const rotY = Math.random() * Math.PI;
       const rotZ = Math.random() * Math.PI;
       
-      // Calculate color based on position along path with more frequent variation
-      // Add sinusoidal variations at different frequencies for more color cycling
-      const baseHue = 0.6 - p * 0.3; // Base gradient
-      const variation1 = Math.sin(p * Math.PI * 8) * 0.15; // Medium frequency variation
-      const variation2 = Math.sin(p * Math.PI * 20) * 0.05; // High frequency variation
-      const randomOffset = (Math.random() - 0.5) * 0.1; // Small random offset per cube
+      const baseHue = 0.6 - p * 0.3;
+      const variation1 = Math.sin(p * Math.PI * 8) * 0.15;
+      const variation2 = Math.sin(p * Math.PI * 20) * 0.05;
+      const randomOffset = (Math.random() - 0.5) * 0.1;
       
-      // Combine all variations and wrap to [0,1] range
       let hue = (baseHue + variation1 + variation2 + randomOffset) % 1;
       if (hue < 0) hue += 1;
       
@@ -291,10 +247,8 @@ function Wormhole({ visible, entered }) {
     return result;
   }, [visibleSpline]);
 
-  // Update the tube and entrance materials in the Wormhole component's return statement
   return (
     <group>
-      {/* Tube wireframe - now with Matrix green glow */}
       <mesh ref={tubeRef}>
         <primitive object={tubeGeometry} attach="geometry" />
         <meshStandardMaterial 
@@ -308,7 +262,6 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
 
-      {/* Flared entrance to the wormhole - matching Matrix green */}
       <mesh ref={entranceRef}>
         <primitive object={entranceGeometry} attach="geometry" />
         <meshStandardMaterial 
@@ -322,7 +275,6 @@ function Wormhole({ visible, entered }) {
         />
       </mesh>
       
-      {/* Rest of the component remains unchanged */}
       <EntranceSuckingCubes visible={visible} entered={entered} />
       <RainbowCubeField />
       
@@ -348,106 +300,86 @@ function Wormhole({ visible, entered }) {
   );
 }
 
-// Update the color generation in the EntranceSuckingCubes component
 function EntranceSuckingCubes({ visible, entered }) {
   const cubes = useMemo(() => {
     const count = 150;
     const result = [];
     
-    // Create cubes that will move toward the entrance
     for (let i = 0; i < count; i++) {
-      // Start from behind the camera in a wide area
       const angle = Math.random() * Math.PI * 2;
       const radius = 3 + Math.random() * 10;
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius;
-      const z = 5 + Math.random() * 15; // Behind the camera (positive Z)
+      const z = 5 + Math.random() * 15;
       
-      // Random movement speeds
       const speed = 1 + Math.random() * 3;
       
-      // Box size (similar to existing boxes)
       const scale = 0.05 + Math.random() * 0.1;
       
-      // Rainbow color - full color spectrum instead of just blues
-      const hue = Math.random(); // Full rainbow color range
+      const hue = Math.random();
       
       result.push({
         position: [x, y, z],
-        initialPosition: [x, y, z], // Store initial position for reset
+        initialPosition: [x, y, z],
         rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2],
         rotationSpeed: [(Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.0],
         speed,
         scale,
         hue,
-        offset: Math.random() * Math.PI * 2 // Phase offset for motion variation
+        offset: Math.random() * Math.PI * 2
       });
     }
     
     return result;
   }, []);
   
-  // Animate cube movement
   const cubeRefs = useRef([]);
   
-  // Initialize cube ref array
   useEffect(() => {
     cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
   }, [cubes.length]);
   
-  // Animation for cube movement toward entrance
   useFrame((state, delta) => {
-    if (entered) return; // Stop the animation if entered
+    if (entered) return;
     
-    // Move cubes toward entrance
     cubes.forEach((cube, i) => {
       if (cubeRefs.current[i]) {
-        // Get current position
         const x = cubeRefs.current[i].position.x;
         const y = cubeRefs.current[i].position.y;
         const z = cubeRefs.current[i].position.z;
         
-        // Calculate direction toward entrance (0,0,-5)
         const targetX = 0;
         const targetY = 0;
         const targetZ = -7;
         
-        // Move toward entrance with curved trajectory
         const distanceToGo = Math.sqrt(
           Math.pow(targetX - x, 2) + 
           Math.pow(targetY - y, 2) + 
           Math.pow(targetZ - z, 2)
         );
         
-        // Speed increases as it gets closer
         const speedFactor = 1 + (5 / (distanceToGo + 1));
         const moveAmount = delta * cube.speed * speedFactor;
         
-        // Calculate new position
         const dirX = targetX - x;
         const dirY = targetY - y;
         const dirZ = targetZ - z;
         const length = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
         
-        // Add spiral movement
         const time = state.clock.getElapsedTime() + cube.offset;
-        const spiralFactor = Math.max(0, Math.min(1, z / 10)) * 0.5; // Stronger spiral further from entrance
+        const spiralFactor = Math.max(0, Math.min(1, z / 10)) * 0.5;
         const spiralX = Math.sin(time * 2) * spiralFactor;
         const spiralY = Math.cos(time * 2) * spiralFactor;
         
-        // Move toward entrance with spiral
         cubeRefs.current[i].position.x += (dirX / length) * moveAmount + spiralX * delta;
         cubeRefs.current[i].position.y += (dirY / length) * moveAmount + spiralY * delta;
         cubeRefs.current[i].position.z += (dirZ / length) * moveAmount;
         
-        // Rotate the cube
         cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0] * speedFactor;
         cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1] * speedFactor;
         cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2] * speedFactor;
         
-        // Reset position when it reaches the entrance
         if (cubeRefs.current[i].position.z <= -7) {
-          // Generate new starting position
           const newAngle = Math.random() * Math.PI * 2;
           const newRadius = 3 + Math.random() * 10;
           cubeRefs.current[i].position.x = Math.cos(newAngle) * newRadius;
@@ -460,7 +392,6 @@ function EntranceSuckingCubes({ visible, entered }) {
   
   if (!visible || entered) return null;
   
-  // Update the material in the EntranceSuckingCubes component's return statement
   return (
     <group>
       {cubes.map((cube, i) => (
@@ -485,38 +416,28 @@ function EntranceSuckingCubes({ visible, entered }) {
   );
 }
 
-// Add this component before the Wormhole component
-
-// Rainbow cube field component for the end of the tunnel
 function RainbowCubeField() {
   const cubes = useMemo(() => {
     const count = 400;
     const result = [];
     
-    // Create a field of cubes
     for (let i = 0; i < count; i++) {
-      // Position cubes starting from the right side
-      const radius = 5 + Math.random() * 15; // Distance from center
-      const theta = Math.random() * Math.PI * 2; // Horizontal angle
-      const phi = Math.random() * Math.PI; // Vertical angle
+      const radius = 5 + Math.random() * 15;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
       
-      // Position them more on the right side to start
-      const x = 15 + Math.random() * 20; // Start on the right (positive X)
-      const y = radius * Math.sin(phi) * Math.sin(theta) * 0.7; // Y position
-      const z = -60 - Math.random() * 20; // Position at end of tunnel
+      const x = 15 + Math.random() * 20;
+      const y = radius * Math.sin(phi) * Math.sin(theta) * 0.7;
+      const z = -60 - Math.random() * 20;
       
-      // Random rotation speeds (similar to existing boxes)
       const rotSpeedX = (Math.random() - 0.5) * 2.0;
       const rotSpeedY = (Math.random() - 0.5) * 2.0;
       const rotSpeedZ = (Math.random() - 0.5) * 2.0;
       
-      // Movement speed for right-to-left motion
       const moveSpeed = 1 + Math.random() * 2;
       
-      // Box size (similar to existing boxes)
       const scale = 0.05 + Math.random() * 0.15;
       
-      // Rainbow color - full color range
       const hue = Math.random();
       
       result.push({
@@ -532,30 +453,22 @@ function RainbowCubeField() {
     return result;
   }, []);
   
-  // Animate cube rotations
   const cubeRefs = useRef([]);
   
-  // Initialize cube ref array
   useEffect(() => {
     cubeRefs.current = cubeRefs.current.slice(0, cubes.length);
   }, [cubes.length]);
   
-  // Animation for individual cube rotation and movement
   useFrame((state, delta) => {
-    // Rotate and move individual cubes
     cubes.forEach((cube, i) => {
       if (cubeRefs.current[i]) {
-        // Rotate the cube
         cubeRefs.current[i].rotation.x += delta * cube.rotationSpeed[0];
         cubeRefs.current[i].rotation.y += delta * cube.rotationSpeed[1];
         cubeRefs.current[i].rotation.z += delta * cube.rotationSpeed[2];
         
-        // Move the cube from right to left
         cubeRefs.current[i].position.x -= delta * cube.moveSpeed;
         
-        // Reset position when it goes too far left
         if (cubeRefs.current[i].position.x < -30) {
-          // Reset to right side with slight variation
           cubeRefs.current[i].position.x = 30 + Math.random() * 10;
           cubeRefs.current[i].position.y = (Math.random() - 0.5) * 20;
         }
@@ -563,7 +476,6 @@ function RainbowCubeField() {
     });
   });
   
-  // Update the material in the RainbowCubeField component's return statement
   return (
     <group>
       {cubes.map((cube, i) => (
@@ -588,31 +500,25 @@ function RainbowCubeField() {
   );
 }
 
-// Text decal component for the box face
 function TextDecal() {
-  // Create a canvas texture for the text
   const textCanvas = useRef(document.createElement('canvas'));
   const [decalTexture, setDecalTexture] = useState(null);
   
   useEffect(() => {
-    // Set up canvas for rendering text
     const canvas = textCanvas.current;
     canvas.width = 256;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
     
-    // Clear canvas
     ctx.fillStyle = 'rgba(0, 0, 0, 0)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw text
     ctx.font = 'bold 70px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000000';
     ctx.fillText('ENTER', canvas.width / 2, canvas.height / 2);
     
-    // Create texture from canvas
     const texture = new THREE.CanvasTexture(canvas);
     setDecalTexture(texture);
   }, []);
@@ -621,7 +527,7 @@ function TextDecal() {
   
   return (
     <Decal
-      position={[0, 0, 0.051]} // Just slightly in front of the box face
+      position={[0, 0, 0.051]}
       rotation={[0, 0, 0]}
       scale={[1, 0.5, 1]}
       material-map={decalTexture}
@@ -636,7 +542,6 @@ function EnterBox({ onEnter }) {
     const [hovered, setHovered] = useState(false);
     const [clicked, setClicked] = useState(false);
     
-    // Handle hover and click events
     const handlePointerOver = () => setHovered(true);
     const handlePointerOut = () => setHovered(false);
     const handleClick = () => {
@@ -644,20 +549,16 @@ function EnterBox({ onEnter }) {
         onEnter();
     };
     
-    // Animation for the box
     useFrame((state) => {
         if (clicked) {
-            // Animate box moving INTO the wormhole (negative Z direction now)
-            boxRef.current.position.z -= 0.15; // Changed from += to -=
+            boxRef.current.position.z -= 0.15;
             boxRef.current.rotation.y += 0.05;
             boxRef.current.scale.multiplyScalar(0.98);
             
-            // Remove box when it's small enough
             if (boxRef.current.scale.x < 0.1) {
                 boxRef.current.visible = false;
             }
         } else {
-            // Subtle floating animation when not clicked
             boxRef.current.rotation.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.3;
             boxRef.current.position.y = Math.sin(state.clock.getElapsedTime()) * 0.1;
         }
@@ -685,12 +586,10 @@ function EnterBox({ onEnter }) {
     );
 }
 
-// Main background component
 const Background = ({ setExited }) => {
     const [entered, setEntered] = useState(false);
     
     const handleEnter = () => {
-        // Start the main animation after a short delay
         setTimeout(() => {
             setEntered(true);
         }, 1000);
@@ -698,10 +597,9 @@ const Background = ({ setExited }) => {
 
   useEffect(() => {
     if (entered) {
-      // Wait for the journey animation to complete
-      const journeyDuration = 6000; // 15 seconds - adjust based on your animation duration
+      const journeyDuration = 6000;
       const timer = setTimeout(() => {
-        setExited(true); // Signal that the journey has completed
+        setExited(true);
       }, journeyDuration);
 
       return () => clearTimeout(timer);
@@ -724,7 +622,6 @@ const Background = ({ setExited }) => {
             >
                 <color attach="background" args={['#000000']} />
 
-                {/* Fog - only active during wormhole journey */}
                 <fog
                     attach="fog"
                     color="#000000"
@@ -732,27 +629,22 @@ const Background = ({ setExited }) => {
                     far={6}
                 />
 
-                {/* Lights */}
                 <pointLight position={[2, 3, 4]} intensity={30} />
                 <ambientLight intensity={0.5} />
                 
-                {/* Wormhole - always visible but with opacity based on entered state */}
                 <Wormhole visible={true} entered={entered} />
 
-                {/* Interactive Enter Box */}
                 {!entered && <EnterBox onEnter={handleEnter} />}
 
-                {/* Post processing */}
                 <EffectComposer>
                     <Bloom 
-                        intensity={2.0}           // Increased from 1.2
-                        luminanceThreshold={0.0}  // Lowered to catch more light
-                        luminanceSmoothing={0.4}  // Increased for smoother glow
-                        radius={0.8}              // Added some radius for broader glow effect
+                        intensity={2.0}
+                        luminanceThreshold={0.0}
+                        luminanceSmoothing={0.4}
+                        radius={0.8}
                     />
                 </EffectComposer>
 
-                {/* Environment */}
                 <Environment preset="night" />
             </Canvas>
         </div>
